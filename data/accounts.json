@@ -1,0 +1,61 @@
+{
+  "next_id": 9,
+  "accounts": [
+    {
+      "id": 1,
+      "name": "اکانت اینستاگرام شرکتی",
+      "identifier": "@company.official",
+      "platform": "Instagram",
+      "status": "active"
+    },
+    {
+      "id": 2,
+      "name": "اکانت توییتر پشتیبانی",
+      "identifier": "@support_team",
+      "platform": "Twitter",
+      "status": "active"
+    },
+    {
+      "id": 3,
+      "name": "اکانت تلگرام فروش",
+      "identifier": "@sales_channel",
+      "platform": "Telegram",
+      "status": "active"
+    },
+    {
+      "id": 4,
+      "name": "اکانت لینکدین شرکت",
+      "identifier": "company-linkedin",
+      "platform": "LinkedIn",
+      "status": "inactive"
+    },
+    {
+      "id": 5,
+      "name": "اکانت یوتیوب آموزشی",
+      "identifier": "@edu_channel",
+      "platform": "YouTube",
+      "status": "active"
+    },
+    {
+      "id": 6,
+      "name": "اکانت فیسبوک بازاریابی",
+      "identifier": "marketing.page",
+      "platform": "Facebook",
+      "status": "active"
+    },
+    {
+      "id": 7,
+      "name": "اکانت پینترست طراحی",
+      "identifier": "design_board",
+      "platform": "Pinterest",
+      "status": "inactive"
+    },
+    {
+      "id": 8,
+      "name": "اکانت تیک‌تاک برند",
+      "identifier": "@brand.tiktok",
+      "platform": "TikTok",
+      "status": "active"
+    }
+  ]
+}

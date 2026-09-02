@@ -1,0 +1,13 @@
+{
+  "next_id": 2,
+  "users": [
+    {
+      "id": 1,
+      "username": "admin",
+      "password_hash": "scrypt:32768:8:1$wUe2jEU29lIYIQF5$0e9e9535f00a2abc2830d0b5e464605d0043dfc6f05f9ad450170002fdf375f14168500c494f64e41d76c9576c7c38ccd824709d2136eba413766821026a46ef",
+      "full_name": "مدیر سیستم",
+      "role": "admin",
+      "created_at": "1404/06/06"
+    }
+  ]
+}

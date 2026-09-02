@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>{% block title %}سامانه مدیریت داخلی{% endblock %}</title>
+
+    <script>
+        // جلوگیری از فلش تم اشتباه هنگام لود صفحه
+        if (localStorage.getItem('theme') === 'dark' ||
+            (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Cairo', 'system-ui', 'sans-serif'],
+                        display: ['Cairo', 'system-ui', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: {
+                            50: '#effcfa', 100: '#c8f6ee', 200: '#93ecdc', 300: '#5cdcc8',
+                            400: '#2dc4ae', 500: '#14a893', 600: '#0d8a79', 700: '#0d6f63',
+                            800: '#0f594f', 900: '#104a43',
+                        },
+                        secondary: {
+                            50: '#fff8f0', 100: '#ffedd8', 200: '#ffd7ac', 300: '#ffbb78',
+                            400: '#ff9d4d', 500: '#f2812f', 600: '#d96a1f', 700: '#b3541a',
+                            800: '#8f451c', 900: '#753a1b',
+                        },
+                        surface: {
+                            light: '#f7f8fb',
+                            dark: '#0a1220',
+                        },
+                    },
+                    boxShadow: {
+                        soft: '0 8px 24px -8px rgba(15, 30, 45, 0.12)',
+                        'soft-lg': '0 20px 48px -16px rgba(15, 30, 45, 0.2)',
+                    },
+                },
+            },
+        };
+    </script>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="min-h-screen bg-surface-light dark:bg-surface-dark text-slate-700 dark:text-slate-200 antialiased">
+
+    <div class="bg-glow" aria-hidden="true"></div>
+
+    {% if session.get('user_id') %}
+    <div class="flex min-h-screen">
+
+        <!-- ================= سایدبار (راست) ================= -->
+        <aside id="sidebar"
+               class="fixed inset-y-0 right-0 z-40 w-72 translate-x-0 lg:translate-x-0 transition-transform duration-300 ease-out
+                      lg:static lg:translate-x-0 flex flex-col
+                      bg-white/80 dark:bg-[#0d1626]/90 backdrop-blur-xl
+                      border-s border-slate-200/70 dark:border-white/5
+                      max-lg:translate-x-full">
+
+            <!-- لوگو -->
+            <div class="flex items-center gap-3 px-6 py-6">
+                <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-soft">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2 3 7v6c0 5 4 9 9 9s9-4 9-9V7l-9-5Z"></path>
+                        <path d="m9 12 2 2 4-4"></path>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm font-bold text-slate-800 dark:text-white">سامانه مدیریت</p>
+                    <p class="text-xs text-slate-400 dark:text-slate-500">پنل داخلی</p>
+                </div>
+                <button id="close-sidebar" class="ms-auto lg:hidden text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 6 6 18M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="mx-6 h-px bg-gradient-to-l from-transparent via-slate-200 dark:via-white/10 to-transparent"></div>
+
+            <!-- آیتم‌های منو -->
+            <nav class="flex-1 space-y-1.5 px-5 py-6 overflow-y-auto">
+                {% set nav_items = [
+                    ('dashboard', url_for('dashboard'), 'داشبورد', 'grid'),
+                    ('users_list', url_for('users_list'), 'مدیریت کاربران', 'users'),
+                    ('accounts_list', url_for('accounts_list'), 'مدیریت اکانت‌ها', 'briefcase'),
+                    ('signatures', url_for('signatures'), 'ثبت امضا', 'pen'),
+                ] %}
+                {% for endpoint, href, label, icon in nav_items %}
+                    {% if endpoint != 'users_list' or current_user.role == 'admin' %}
+                    <a href="{{ href }}"
+                       class="nav-item {% if request.endpoint == endpoint %}active bg-primary-50 dark:bg-primary-500/10 text-primary-700 dark:text-primary-300{% else %}text-slate-500 dark:text-slate-400 hover:bg-slate-100/70 dark:hover:bg-white/5 hover:text-slate-800 dark:hover:text-slate-100{% endif %}
+                       flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium">
+                        <span class="flex h-9 w-9 items-center justify-center rounded-lg {% if request.endpoint == endpoint %}bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-soft{% else %}bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-slate-500{% endif %}">
+                            {% if icon == 'grid' %}
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+                            {% elif icon == 'users' %}
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path><circle cx="10" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                            {% elif icon == 'briefcase' %}
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+                            {% elif icon == 'pen' %}
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+                            {% endif %}
+                        </span>
+                        <span>{{ label }}</span>
+                    </a>
+                    {% endif %}
+                {% endfor %}
+            </nav>
+
+            <div class="mx-6 h-px bg-gradient-to-l from-transparent via-slate-200 dark:via-white/10 to-transparent"></div>
+
+            <!-- پروفایل کاربر -->
+            <div class="p-5">
+                <div class="flex items-center gap-3 rounded-2xl bg-slate-50 dark:bg-white/5 px-4 py-3">
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-secondary-400 to-secondary-600 text-sm font-bold text-white">
+                        {{ current_user.full_name[0] if current_user.full_name else '؟' }}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <p class="truncate text-sm font-semibold text-slate-700 dark:text-slate-100">{{ current_user.full_name }}</p>
+                        <p class="text-xs text-slate-400 dark:text-slate-500">{{ 'مدیر سیستم' if current_user.role == 'admin' else 'کاربر عادی' }}</p>
+                    </div>
+                    <a href="{{ url_for('logout') }}" title="خروج از سیستم"
+                       class="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10 dark:hover:text-red-400 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path></svg>
+                    </a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- پوشش تیره پشت سایدبار در حالت موبایل -->
+        <div id="sidebar-overlay" class="fixed inset-0 z-30 hidden bg-slate-900/40 backdrop-blur-sm opacity-0 transition-opacity duration-300 lg:hidden"></div>
+
+        <!-- ================= محتوای اصلی ================= -->
+        <div class="flex-1 flex flex-col min-w-0">
+
+            <!-- نوار بالا -->
+            <header class="sticky top-0 z-20 flex items-center gap-4 border-b border-slate-200/70 dark:border-white/5 bg-white/70 dark:bg-[#0a1220]/70 backdrop-blur-xl px-6 py-4">
+                <button id="open-sidebar" class="lg:hidden flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"></path></svg>
+                </button>
+
+                <h1 class="text-lg font-bold text-slate-800 dark:text-white">{% block page_title %}داشبورد{% endblock %}</h1>
+
+                <div class="ms-auto flex items-center gap-3">
+                    <!-- سوییچ تم -->
+                    <button data-theme-toggle onclick="toggleTheme()"
+                            class="theme-toggle relative flex h-10 w-[4.5rem] items-center rounded-full bg-slate-100 dark:bg-white/10 px-1">
+                        <span class="toggle-dot absolute right-1 flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-soft">
+                            <svg data-icon="sun" xmlns="http://www.w3.org/2000/svg" class="absolute h-4 w-4 text-secondary-500 transition-opacity duration-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"></path></svg>
+                            <svg data-icon="moon" xmlns="http://www.w3.org/2000/svg" class="absolute h-4 w-4 text-primary-400 opacity-0 transition-opacity duration-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"></path></svg>
+                        </span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- پیام‌های فلش -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="px-6 pt-5 space-y-2">
+                    {% for category, message in messages %}
+                    <div data-flash class="animate-in flex items-center gap-3 rounded-xl border px-4 py-3 text-sm shadow-soft transition-all duration-300
+                        {% if category == 'success' %}bg-primary-50 dark:bg-primary-500/10 border-primary-200 dark:border-primary-500/20 text-primary-800 dark:text-primary-300
+                        {% else %}bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-300{% endif %}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            {% if category == 'success' %}<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><path d="m9 11 3 3L22 4"></path>
+                            {% else %}<circle cx="12" cy="12" r="10"></circle><path d="M12 8v4M12 16h.01"></path>{% endif %}
+                        </svg>
+                        <span class="flex-1">{{ message }}</span>
+                        <button data-flash-close class="text-current opacity-50 hover:opacity-100">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            {% endwith %}
+
+            <!-- محتوای صفحه -->
+            <main class="flex-1 px-6 py-6">
+                {% block content %}{% endblock %}
+            </main>
+
+            <footer class="px-6 py-4 text-center text-xs text-slate-400 dark:text-slate-600">
+                © {{ now.year }} سامانه مدیریت داخلی — تمام حقوق محفوظ است.
+            </footer>
+        </div>
+    </div>
+
+    {% else %}
+        {% block auth_content %}{% endblock %}
+    {% endif %}
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

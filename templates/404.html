@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>صفحه یافت نشد</title>
+    <script>
+        if (localStorage.getItem('theme') === 'dark' ||
+            (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { fontFamily: { sans: ['Cairo', 'system-ui', 'sans-serif'], display: ['Cairo', 'system-ui', 'sans-serif'] },
+                colors: { primary: { 500: '#14a893', 600: '#0d8a79', 700: '#0d6f63' }, secondary: { 500: '#f2812f' } } } }
+        };
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="min-h-screen flex items-center justify-center bg-surface-light dark:bg-surface-dark text-slate-700 dark:text-slate-200">
+    <div class="bg-glow"></div>
+    <div class="text-center px-6">
+        <p class="font-display text-gradient text-8xl">۴۰۴</p>
+        <h1 class="mt-4 text-xl font-bold text-slate-800 dark:text-white">صفحه مورد نظر یافت نشد</h1>
+        <p class="mt-2 text-sm text-slate-400 dark:text-slate-500">آدرسی که وارد کرده‌اید در سامانه وجود ندارد.</p>
+        <a href="/" class="btn-primary mt-8 inline-flex rounded-xl px-6 py-3 text-sm font-bold text-white shadow-soft">بازگشت به سامانه</a>
+    </div>
+</body>
+</html>

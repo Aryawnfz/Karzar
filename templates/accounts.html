@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}مدیریت اکانت‌ها | سامانه مدیریت{% endblock %}
+{% block page_title %}مدیریت اکانت‌ها{% endblock %}
+
+{% block content %}
+
+<div class="animate-in glass-card rounded-3xl p-10 sm:p-16 text-center relative overflow-hidden">
+    <div class="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-primary-500/10 blur-2xl"></div>
+    <div class="absolute -bottom-10 -left-10 h-40 w-40 rounded-full bg-secondary-500/10 blur-2xl"></div>
+
+    <div class="relative mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-primary-500 to-secondary-500 shadow-soft-lg">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+    </div>
+
+    <h2 class="relative text-xl font-bold text-slate-800 dark:text-white">مدیریت اکانت‌ها</h2>
+    <p class="relative mx-auto mt-3 max-w-md text-sm leading-7 text-slate-400 dark:text-slate-500">
+        این بخش به‌زودی راه‌اندازی خواهد شد. از اینجا می‌توانید اکانت‌ها را افزودن، ویرایش، دسته‌بندی و مدیریت کنید.
+        در حال حاضر تنها ساختار اولیه صفحه آماده شده و منطق کامل در آینده اضافه خواهد شد.
+    </p>
+
+    <div class="relative mt-8 inline-flex items-center gap-2 rounded-full bg-secondary-50 dark:bg-secondary-500/10 px-5 py-2.5 text-sm font-semibold text-secondary-600 dark:text-secondary-400">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
+        به‌زودی در دسترس خواهد بود
+    </div>
+</div>
+
+<!-- پیش‌نمایش اکانت‌های موجود -->
+<div class="mt-6">
+    <h3 class="mb-4 text-base font-bold text-slate-800 dark:text-white">پیش‌نمایش اکانت‌های ثبت‌شده</h3>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {% for acc in accounts %}
+        <div class="animate-in stagger-{{ (loop.index0 % 6) + 1 }} glass-card rounded-2xl p-5 flex items-center gap-4">
+            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 text-sm font-bold text-white">
+                {{ acc.platform[0] }}
+            </div>
+            <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-semibold text-slate-700 dark:text-slate-100">{{ acc.name }}</p>
+                <p class="truncate text-xs text-slate-400 dark:text-slate-500">{{ acc.identifier }}</p>
+            </div>
+            <span class="h-2.5 w-2.5 shrink-0 rounded-full {{ 'bg-emerald-500 status-dot text-emerald-500' if acc.status == 'active' else 'bg-slate-300 dark:bg-slate-600' }}"></span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endblock %}

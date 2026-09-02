@@ -1,0 +1,434 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap');
+
+:root {
+    --shadow-color: 205deg 60% 10%;
+}
+
+* {
+    font-family: 'Cairo', system-ui, sans-serif;
+}
+
+.font-display {
+    font-family: 'Cairo', system-ui, sans-serif;
+    font-weight: 800;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    transition: background-color 0.35s ease, color 0.35s ease;
+}
+
+/* ---------- اسکرول‌بار سفارشی ---------- */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(20, 168, 147, 0.35);
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(20, 168, 147, 0.55);
+}
+
+/* ---------- کارت شیشه‌ای (Glassmorphism) ---------- */
+.glass-card {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow:
+        0 1px 2px hsl(var(--shadow-color) / 0.06),
+        0 8px 24px -8px hsl(var(--shadow-color) / 0.12);
+    transition: box-shadow 0.35s ease, transform 0.35s ease, background-color 0.35s ease, border-color 0.35s ease;
+}
+
+.dark .glass-card {
+    background: rgba(19, 28, 43, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow:
+        0 1px 2px hsl(0deg 0% 0% / 0.2),
+        0 8px 30px -10px hsl(0deg 0% 0% / 0.45);
+}
+
+.glass-card:hover {
+    box-shadow:
+        0 2px 4px hsl(var(--shadow-color) / 0.08),
+        0 16px 40px -12px hsl(var(--shadow-color) / 0.18);
+}
+
+/* ---------- افکت درخشش لطیف پشت زمینه ---------- */
+.bg-glow {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.bg-glow::before,
+.bg-glow::after {
+    content: '';
+    position: absolute;
+    width: 42rem;
+    height: 42rem;
+    border-radius: 9999px;
+    filter: blur(120px);
+    opacity: 0.16;
+    animation: float 22s ease-in-out infinite;
+}
+
+.bg-glow::before {
+    background: #14a893;
+    top: -14rem;
+    inset-inline-end: -10rem;
+}
+
+.bg-glow::after {
+    background: #f2812f;
+    bottom: -16rem;
+    inset-inline-start: -12rem;
+    animation-delay: -11s;
+}
+
+.dark .bg-glow::before,
+.dark .bg-glow::after {
+    opacity: 0.12;
+}
+
+@keyframes float {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-2rem, 3rem) scale(1.08); }
+}
+
+/* ---------- آیتم منوی کناری ---------- */
+.nav-item {
+    position: relative;
+    transition: background-color 0.25s ease, color 0.25s ease, transform 0.2s ease;
+}
+
+.nav-item:hover {
+    transform: translateX(-2px);
+}
+
+.nav-item.active::before {
+    content: '';
+    position: absolute;
+    inset-inline-end: -1.25rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 60%;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #14a893, #f2812f);
+}
+
+/* ---------- سوییچ تم ---------- */
+.theme-toggle {
+    position: relative;
+    transition: background-color 0.35s ease;
+}
+
+.theme-toggle .toggle-dot {
+    transition: transform 0.35s cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* ---------- ورود نرم عناصر ---------- */
+.animate-in {
+    animation: fadeSlideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes fadeSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.stagger-1 { animation-delay: 0.04s; }
+.stagger-2 { animation-delay: 0.08s; }
+.stagger-3 { animation-delay: 0.12s; }
+.stagger-4 { animation-delay: 0.16s; }
+.stagger-5 { animation-delay: 0.2s; }
+.stagger-6 { animation-delay: 0.24s; }
+
+/* ---------- کارت اکانت (چک‌باکس سفارشی) ---------- */
+.account-card {
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.account-card:has(.account-checkbox:checked) {
+    border-color: #14a893;
+    box-shadow: 0 0 0 3px rgba(20, 168, 147, 0.15);
+}
+
+.account-card:hover {
+    transform: translateY(-3px);
+}
+
+/* ---------- گرادیان متن ---------- */
+.text-gradient {
+    background: linear-gradient(90deg, #14a893, #f2812f);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* ---------- افکت فوکوس ورودی‌ها ---------- */
+.input-field {
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, background-color 0.25s ease;
+}
+
+.input-field:focus {
+    box-shadow: 0 0 0 4px rgba(20, 168, 147, 0.15);
+}
+
+/* ---------- دکمه اصلی با درخشش هاور ---------- */
+.btn-primary {
+    background: linear-gradient(135deg, #14a893, #0d8a79);
+    transition: box-shadow 0.3s ease, transform 0.2s ease, background 0.3s ease;
+}
+
+.btn-primary:hover {
+    box-shadow: 0 8px 20px -6px rgba(20, 168, 147, 0.5);
+    transform: translateY(-1px);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+/* ---------- بج وضعیت ---------- */
+.status-dot {
+    box-shadow: 0 0 0 3px currentColor;
+    opacity: 0.35;
+}
+
+/* ---------- اسکلتون بارگذاری ---------- */
+.skeleton {
+    background: linear-gradient(90deg, rgba(148, 163, 184, 0.12) 25%, rgba(148, 163, 184, 0.22) 37%, rgba(148, 163, 184, 0.12) 63%);
+    background-size: 400% 100%;
+    animation: skeleton-loading 1.4s ease infinite;
+}
+
+@keyframes skeleton-loading {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+}
+
+/* ============================================================
+   صفحه ورود — پنل برند، مش گرادیانی، شبکه نقطه‌ای
+   ============================================================ */
+.auth-mesh {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 15% 20%, rgba(20, 168, 147, 0.55), transparent 45%),
+        radial-gradient(circle at 85% 15%, rgba(242, 129, 47, 0.4), transparent 40%),
+        radial-gradient(circle at 50% 85%, rgba(13, 138, 121, 0.5), transparent 50%),
+        linear-gradient(160deg, #0a3d38 0%, #0d1f2b 55%, #08151f 100%);
+}
+
+.auth-mesh::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse at center, black 0%, transparent 75%);
+}
+
+.auth-orb {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(70px);
+    animation: orbit 18s ease-in-out infinite;
+}
+
+@keyframes orbit {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(3rem, -2rem) scale(1.15); }
+    66% { transform: translate(-2rem, 3rem) scale(0.9); }
+}
+
+.auth-noise {
+    position: absolute;
+    inset: 0;
+    opacity: 0.35;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
+    mix-blend-mode: overlay;
+    pointer-events: none;
+}
+
+.auth-badge-float {
+    animation: badgeFloat 6s ease-in-out infinite;
+}
+
+@keyframes badgeFloat {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-10px) rotate(2deg); }
+}
+
+/* ---------- کارت شیشه‌ای تیره ویژه فرم ورود ---------- */
+.glass-card-dark {
+    background: rgba(13, 22, 38, 0.55);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow:
+        0 1px 1px rgba(255, 255, 255, 0.06) inset,
+        0 30px 60px -20px rgba(0, 0, 0, 0.55);
+}
+
+/* ---------- دکمه با افکت درخشش متحرک (Shimmer) ---------- */
+.btn-shimmer {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #14a893, #0d8a79 55%, #0a6d61);
+}
+
+.btn-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.35) 50%, transparent 60%);
+    transform: translateX(-120%);
+    transition: transform 0.9s ease;
+}
+
+.btn-shimmer:hover::after {
+    transform: translateX(120%);
+}
+
+.btn-shimmer:hover {
+    box-shadow: 0 10px 30px -8px rgba(20, 168, 147, 0.6);
+}
+
+/* ---------- ورودی شناور با گرادیان بوردر هنگام فوکوس ---------- */
+.input-glow {
+    position: relative;
+    transition: box-shadow 0.3s ease, border-color 0.3s ease, background-color 0.3s ease;
+}
+
+.input-glow:focus-within {
+    border-color: transparent;
+    box-shadow: 0 0 0 1.5px #14a893, 0 0 24px -4px rgba(20, 168, 147, 0.55);
+}
+
+/* ---------- خط جداکننده گرادیانی ---------- */
+.divider-gradient {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+}
+
+/* ============================================================
+   مودال افزودن کاربر — نسخه ویژه
+   ============================================================ */
+.modal-header-gradient {
+    background:
+        radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.18), transparent 55%),
+        linear-gradient(120deg, #0d8a79, #14a893 45%, #f2812f 130%);
+    position: relative;
+    overflow: hidden;
+}
+
+.modal-header-gradient::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.35) 1px, transparent 1px);
+    background-size: 16px 16px;
+    opacity: 0.25;
+}
+
+.modal-header-gradient::after {
+    content: '';
+    position: absolute;
+    width: 10rem;
+    height: 10rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.14);
+    top: -3rem;
+    left: -3rem;
+    filter: blur(10px);
+}
+
+.avatar-preview {
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+/* ---------- نوار قدرت رمز عبور ---------- */
+.strength-bar {
+    height: 5px;
+    border-radius: 999px;
+    flex: 1;
+    background: rgba(148, 163, 184, 0.25);
+    overflow: hidden;
+}
+
+.strength-bar > span {
+    display: block;
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    transition: width 0.35s ease, background-color 0.35s ease;
+}
+
+/* ============================================================
+   دراپ‌داون سفارشی (کمبوباکس فیلتر نقش)
+   ============================================================ */
+.custom-select-btn {
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, background-color 0.25s ease;
+}
+
+.custom-select-panel {
+    transform-origin: top center;
+    transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.custom-select-panel.is-closed {
+    opacity: 0;
+    transform: scale(0.96) translateY(-6px);
+    pointer-events: none;
+}
+
+.custom-select-option {
+    transition: background-color 0.18s ease, color 0.18s ease, padding-right 0.18s ease;
+}
+
+.custom-select-option[data-selected="true"] {
+    background: linear-gradient(90deg, rgba(20, 168, 147, 0.12), rgba(242, 129, 47, 0.08));
+}
+
+.custom-select-chevron {
+    transition: transform 0.25s ease;
+}
+
+.custom-select-btn[aria-expanded="true"] .custom-select-chevron {
+    transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

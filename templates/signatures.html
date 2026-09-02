@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}ثبت امضا | سامانه مدیریت{% endblock %}
+{% block page_title %}ثبت امضا{% endblock %}
+
+{% block content %}
+
+<form method="POST" action="{{ url_for('signatures_submit') }}">
+
+    <!-- فیلد ورودی لینک/کد -->
+    <div class="animate-in glass-card rounded-2xl p-6 mb-6">
+        <label for="link_or_code" class="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-200">لینک یا کد امضا</label>
+        <p class="mb-4 text-sm text-slate-400 dark:text-slate-500">لینک یا کد مربوطه را در فیلد زیر وارد کرده و اکانت‌های مورد نظر را از فهرست انتخاب کنید.</p>
+        <div class="relative">
+            <svg xmlns="http://www.w3.org/2000/svg" class="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+            <input type="text" id="link_or_code" name="link_or_code" required
+                   placeholder="https://example.com/sign/xxxxx یا کد امضا"
+                   class="input-field w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 py-3.5 pe-4 ps-11 text-sm text-slate-700 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 outline-none focus:border-primary-400">
+        </div>
+    </div>
+
+    <!-- لیست اکانت‌ها -->
+    <div class="animate-in stagger-1 mb-6">
+        <div class="mb-4 flex items-center justify-between">
+            <div>
+                <h3 class="text-base font-bold text-slate-800 dark:text-white">انتخاب اکانت‌ها</h3>
+                <p class="mt-1 text-sm text-slate-400 dark:text-slate-500"><span id="selected-count">0</span> اکانت از {{ accounts|length }} انتخاب شده</p>
+            </div>
+            <button type="button" id="select-all-accounts"
+                    class="rounded-xl border border-slate-200 dark:border-white/10 px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                انتخاب همه
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {% for acc in accounts %}
+            <label for="acc-{{ acc.id }}"
+                   class="account-card animate-in stagger-{{ (loop.index0 % 6) + 1 }} glass-card cursor-pointer rounded-2xl border-2 border-transparent p-5 flex items-start gap-4">
+                <input type="checkbox" id="acc-{{ acc.id }}" name="account_ids" value="{{ acc.id }}"
+                       class="account-checkbox peer sr-only">
+
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 text-sm font-bold text-white">
+                    {{ acc.platform[0] }}
+                </div>
+
+                <div class="min-w-0 flex-1">
+                    <p class="truncate text-sm font-semibold text-slate-700 dark:text-slate-100">{{ acc.name }}</p>
+                    <p class="truncate text-xs text-slate-400 dark:text-slate-500 mt-0.5">{{ acc.identifier }}</p>
+                    <span class="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold {{ 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' if acc.status == 'active' else 'bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-slate-500' }}">
+                        <span class="h-1.5 w-1.5 rounded-full {{ 'bg-emerald-500' if acc.status == 'active' else 'bg-slate-400' }}"></span>
+                        {{ 'فعال' if acc.status == 'active' else 'غیرفعال' }}
+                    </span>
+                </div>
+
+                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-slate-200 dark:border-white/15 peer-checked:border-primary-500 peer-checked:bg-primary-500 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+                </span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- دکمه ثبت -->
+    <div class="animate-in stagger-2 sticky bottom-4 flex justify-center sm:justify-end">
+        <button type="submit" id="submit-signature-btn" disabled
+                class="btn-primary opacity-50 cursor-not-allowed flex items-center gap-2 rounded-2xl px-8 py-4 text-sm font-bold text-white shadow-soft-lg w-full sm:w-auto justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+            ثبت امضا
+        </button>
+    </div>
+</form>
+
+{% endblock %}

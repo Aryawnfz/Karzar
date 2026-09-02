@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}ورود به سامانه{% endblock %}
+
+{% block auth_content %}
+<div class="relative min-h-screen overflow-hidden bg-surface-light dark:bg-surface-dark">
+
+    <div class="flex min-h-screen flex-col lg:flex-row">
+
+        <!-- ================= پنل برند (سمت راست) ================= -->
+        <div class="relative hidden lg:flex lg:w-[46%] xl:w-[42%] items-center justify-center overflow-hidden px-12 py-16">
+            <div class="auth-mesh"></div>
+            <div class="auth-orb h-72 w-72 bg-primary-400/40" style="top:8%; right:10%;"></div>
+            <div class="auth-orb h-56 w-56 bg-secondary-400/30" style="bottom:12%; right:-4%; animation-delay:-6s;"></div>
+            <div class="auth-orb h-40 w-40 bg-primary-300/25" style="bottom:30%; left:8%; animation-delay:-11s;"></div>
+            <div class="auth-noise"></div>
+
+            <div class="relative z-10 max-w-md text-white">
+                <div class="auth-badge-float mb-8 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-soft-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2 3 7v6c0 5 4 9 9 9s9-4 9-9V7l-9-5Z"></path>
+                        <path d="m9 12 2 2 4-4"></path>
+                    </svg>
+                </div>
+
+                <h1 class="font-display text-5xl leading-[1.15] tracking-wide">سامانه<br>مدیریت داخلی</h1>
+                <p class="mt-5 text-sm leading-8 text-white/70">
+                    پلتفرم یکپارچه برای مدیریت کاربران، اکانت‌ها و فرآیندهای امضا؛ طراحی‌شده با دقت و امنیت برای تیم شما.
+                </p>
+
+                <div class="mt-10 space-y-4">
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 border border-white/10 text-primary-300">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        </span>
+                        <span class="text-sm text-white/80">دسترسی امن و مبتنی بر نقش</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 border border-white/10 text-secondary-300">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path><circle cx="10" cy="7" r="4"></circle></svg>
+                        </span>
+                        <span class="text-sm text-white/80">مدیریت متمرکز کاربران و اکانت‌ها</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 border border-white/10 text-primary-300">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+                        </span>
+                        <span class="text-sm text-white/80">فرآیند ثبت امضای سریع و ساده</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= پنل فرم ورود ================= -->
+        <div class="relative flex flex-1 items-center justify-center px-4 py-12 sm:px-8">
+
+            <!-- زمینه تزئینی موبایل (وقتی پنل برند مخفی است) -->
+            <div class="absolute inset-0 lg:hidden">
+                <div class="auth-mesh"></div>
+                <div class="auth-noise"></div>
+            </div>
+
+            <div class="relative z-10 w-full max-w-md">
+
+                <!-- سوییچ تم -->
+                <div class="mb-6 flex justify-center lg:justify-end">
+                    <button data-theme-toggle onclick="toggleTheme()"
+                            class="theme-toggle relative flex h-10 w-[4.5rem] items-center rounded-full bg-white/10 lg:bg-slate-100 lg:dark:bg-white/10 border border-white/10 lg:border-transparent px-1">
+                        <span class="toggle-dot absolute right-1 flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-soft">
+                            <svg data-icon="sun" xmlns="http://www.w3.org/2000/svg" class="absolute h-4 w-4 text-secondary-500 transition-opacity duration-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"></path></svg>
+                            <svg data-icon="moon" xmlns="http://www.w3.org/2000/svg" class="absolute h-4 w-4 text-primary-400 opacity-0 transition-opacity duration-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"></path></svg>
+                        </span>
+                    </button>
+                </div>
+
+                <!-- پیام‌های فلش -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                    <div class="mb-5 space-y-2">
+                        {% for category, message in messages %}
+                        <div data-flash class="animate-in flex items-center gap-3 rounded-xl border px-4 py-3 text-sm shadow-soft
+                            {% if category == 'success' %}bg-primary-500/10 border-primary-400/30 text-primary-200 lg:bg-primary-50 lg:dark:bg-primary-500/10 lg:border-primary-200 lg:dark:border-primary-500/20 lg:text-primary-800 lg:dark:text-primary-300
+                            {% else %}bg-red-500/10 border-red-400/30 text-red-200 lg:bg-red-50 lg:dark:bg-red-500/10 lg:border-red-200 lg:dark:border-red-500/20 lg:text-red-700 lg:dark:text-red-300{% endif %}">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                {% if category == 'success' %}<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><path d="m9 11 3 3L22 4"></path>
+                                {% else %}<circle cx="12" cy="12" r="10"></circle><path d="M12 8v4M12 16h.01"></path>{% endif %}
+                            </svg>
+                            <span class="flex-1">{{ message }}</span>
+                            <button data-flash-close class="text-current opacity-50 hover:opacity-100">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="animate-in glass-card-dark lg:glass-card rounded-[2rem] p-8 sm:p-10 text-white lg:text-slate-700 lg:dark:text-slate-200">
+
+                    <div class="mb-8 flex flex-col items-center text-center lg:hidden">
+                        <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-soft-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 2 3 7v6c0 5 4 9 9 9s9-4 9-9V7l-9-5Z"></path>
+                                <path d="m9 12 2 2 4-4"></path>
+                            </svg>
+                        </div>
+                        <h1 class="font-display text-3xl tracking-wide">سامانه مدیریت</h1>
+                    </div>
+
+                    <div class="mb-8 hidden text-center lg:block">
+                        <h2 class="text-2xl font-bold text-slate-800 dark:text-white">خوش آمدید</h2>
+                        <p class="mt-2 text-sm text-slate-400 dark:text-slate-500">برای دسترسی به پنل، وارد حساب کاربری خود شوید</p>
+                    </div>
+
+                    <form method="POST" action="{{ url_for('login') }}" class="space-y-5">
+                        <div>
+                            <label for="username" class="mb-2 block text-sm font-medium text-white/80 lg:text-slate-600 lg:dark:text-slate-300">نام کاربری</label>
+                            <div class="input-glow relative rounded-xl border border-white/15 lg:border-slate-200 lg:dark:border-white/10 bg-white/5 lg:bg-white/60 lg:dark:bg-white/5">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/40 lg:text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                <input type="text" id="username" name="username" required autofocus autocomplete="username"
+                                       placeholder="admin"
+                                       class="w-full rounded-xl bg-transparent py-3.5 pe-4 ps-11 text-sm text-white lg:text-slate-700 lg:dark:text-slate-100 placeholder:text-white/30 lg:placeholder:text-slate-300 lg:dark:placeholder:text-slate-600 outline-none">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="password" class="mb-2 block text-sm font-medium text-white/80 lg:text-slate-600 lg:dark:text-slate-300">رمز عبور</label>
+                            <div class="input-glow relative rounded-xl border border-white/15 lg:border-slate-200 lg:dark:border-white/10 bg-white/5 lg:bg-white/60 lg:dark:bg-white/5">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/40 lg:text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                                <input type="password" id="password" name="password" required autocomplete="current-password"
+                                       placeholder="••••••••"
+                                       class="w-full rounded-xl bg-transparent py-3.5 pe-11 ps-11 text-sm text-white lg:text-slate-700 lg:dark:text-slate-100 placeholder:text-white/30 lg:placeholder:text-slate-300 lg:dark:placeholder:text-slate-600 outline-none">
+                                <button type="button" onclick="const i=document.getElementById('password'); i.type = i.type === 'password' ? 'text' : 'password';"
+                                        class="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 lg:text-slate-400 hover:text-white lg:hover:text-slate-600 lg:dark:hover:text-slate-200">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="submit"
+                                class="btn-shimmer w-full rounded-xl py-3.5 text-sm font-bold text-white shadow-soft flex items-center justify-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+                            ورود به سامانه
+                        </button>
+                    </form>
+
+                    <div class="divider-gradient my-7"></div>
+
+                    <p class="flex items-center justify-center gap-2 text-center text-xs text-white/40 lg:text-slate-400 lg:dark:text-slate-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        دسترسی به این سامانه محدود به کاربران مجاز است
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
