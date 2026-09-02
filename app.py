@@ -8,6 +8,8 @@
 
 import json
 import os
+import shutil
+import threading
 from datetime import datetime
 from functools import wraps
 
@@ -23,6 +25,8 @@ from flask import (
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 
+import karzar_login
+
 # --------------------------------------------------------------------------
 # پیکربندی پایه
 # --------------------------------------------------------------------------
@@ -30,6 +34,7 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
 ACCOUNTS_FILE = os.path.join(DATA_DIR, "accounts.json")
+_accounts_lock = threading.Lock()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-this-secret-key-in-production")
@@ -302,14 +307,103 @@ def users_delete(user_id):
 
 
 # --------------------------------------------------------------------------
-# مسیرها: مدیریت اکانت‌ها (ساختار اولیه)
+# مسیرها: مدیریت اکانت‌های کارزار
 # --------------------------------------------------------------------------
 @app.route("/accounts")
 @login_required
 def accounts_list():
     data = get_accounts_data()
-    accounts = data["accounts"]
+    accounts = sorted(data["accounts"], key=lambda a: a["id"])
     return render_template("accounts.html", accounts=accounts)
+
+
+def _identifier_exists(identifier):
+    data = get_accounts_data()
+    return any(a["identifier"].strip().lower() == identifier.strip().lower() for a in data["accounts"])
+
+
+def _append_account(name, identifier, user_data_dir):
+    with _accounts_lock:
+        data = get_accounts_data()
+        account = {
+            "id": data["next_id"],
+            "name": name,
+            "identifier": identifier,
+            "platform": "Karzar",
+            "user_data_dir": user_data_dir,
+            "status": "active",
+            "created_at": datetime.now().strftime("%Y/%m/%d %H:%M"),
+        }
+        data["accounts"].append(account)
+        data["next_id"] += 1
+        save_json(ACCOUNTS_FILE, data)
+
+
+@app.route("/accounts/add/start", methods=["POST"])
+@login_required
+def accounts_add_start():
+    payload = request.get_json(silent=True) or request.form
+    name = (payload.get("name") or "").strip()
+    identifier = (payload.get("identifier") or "").strip()
+
+    if not name or not identifier:
+        return jsonify({"ok": False, "error": "نام اکانت و شماره موبایل/ایمیل را وارد کنید."}), 400
+    if _identifier_exists(identifier):
+        return jsonify({"ok": False, "error": "اکانتی با این شماره/ایمیل قبلاً ثبت شده است."}), 400
+
+    user_data_dir = karzar_login.profile_dir_for(name)
+    sid = karzar_login.start_login(
+        identifier,
+        user_data_dir,
+        on_success=lambda: _append_account(name, identifier, user_data_dir),
+    )
+    return jsonify({"ok": True, "sid": sid})
+
+
+@app.route("/accounts/add/status/<sid>")
+@login_required
+def accounts_add_status(sid):
+    return jsonify(karzar_login.get_status(sid))
+
+
+@app.route("/accounts/add/otp/<sid>", methods=["POST"])
+@login_required
+def accounts_add_otp(sid):
+    payload = request.get_json(silent=True) or request.form
+    code = (payload.get("code") or "").strip()
+    if not code:
+        return jsonify({"ok": False, "error": "کد را وارد کنید."}), 400
+    if karzar_login.get_status(sid)["status"] != karzar_login.ST_WAIT_OTP:
+        return jsonify({"ok": False, "error": "فرایند ورود در مرحلهٔ دریافت کد نیست."}), 400
+    karzar_login.submit_otp(sid, code)
+    return jsonify({"ok": True})
+
+
+@app.route("/accounts/add/cancel/<sid>", methods=["POST"])
+@login_required
+def accounts_add_cancel(sid):
+    karzar_login.cancel(sid)
+    return jsonify({"ok": True})
+
+
+@app.route("/accounts/delete/<int:account_id>", methods=["POST"])
+@login_required
+def accounts_delete(account_id):
+    with _accounts_lock:
+        data = get_accounts_data()
+        target = next((a for a in data["accounts"] if a["id"] == account_id), None)
+        if not target:
+            flash("اکانت مورد نظر یافت نشد.", "error")
+            return redirect(url_for("accounts_list"))
+        data["accounts"] = [a for a in data["accounts"] if a["id"] != account_id]
+        save_json(ACCOUNTS_FILE, data)
+
+    profile = target.get("user_data_dir")
+    if profile and os.path.isdir(profile) and os.path.abspath(profile).startswith(karzar_login.PROFILES_DIR):
+        shutil.rmtree(profile, ignore_errors=True)
+
+    flash(f"اکانت «{target['name']}» حذف شد.", "success")
+    return redirect(url_for("accounts_list"))
 
 
 # --------------------------------------------------------------------------
