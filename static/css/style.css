@@ -175,8 +175,25 @@ body {
     box-shadow: 0 0 0 3px rgba(20, 168, 147, 0.15);
 }
 
+.account-card:has(.account-checkbox:checked) .account-check {
+    border-color: #14a893;
+    background-color: #14a893;
+}
+
+.account-card:has(.account-checkbox:checked) .account-check svg {
+    opacity: 1;
+}
+
 .account-card:hover {
     transform: translateY(-3px);
+}
+
+.account-card.is-locked {
+    cursor: default;
+}
+
+.account-card.is-locked:hover {
+    transform: none;
 }
 
 /* ---------- گرادیان متن ---------- */
