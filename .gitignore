@@ -4,3 +4,5 @@ __pycache__/
 data/profiles/
 data/login_sessions/
 venv/
+data/sign_jobs/
+data/screenshots/

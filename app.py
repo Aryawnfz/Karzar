@@ -22,10 +22,13 @@ from flask import (
     session,
     flash,
     jsonify,
+    send_file,
+    abort,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 
 import karzar_login
+import karzar_sign
 
 # --------------------------------------------------------------------------
 # پیکربندی پایه
@@ -407,33 +410,65 @@ def accounts_delete(account_id):
 
 
 # --------------------------------------------------------------------------
-# مسیرها: ثبت امضا (فقط رابط کاربری)
+# مسیرها: ثبت امضا (با Playwright و پروفایل هر اکانت)
 # --------------------------------------------------------------------------
 @app.route("/signatures")
 @login_required
 def signatures():
     data = get_accounts_data()
-    accounts = data["accounts"]
+    accounts = sorted(data["accounts"], key=lambda a: a["id"])
     return render_template("signatures.html", accounts=accounts)
 
 
 @app.route("/signatures/submit", methods=["POST"])
 @login_required
 def signatures_submit():
-    # منطق پردازش در آینده اضافه خواهد شد. در حال حاضر فقط پیام تأیید نمایش داده می‌شود.
-    link_or_code = request.form.get("link_or_code", "").strip()
-    selected_ids = request.form.getlist("account_ids")
+    payload = request.get_json(silent=True)
+    if payload is not None:
+        link_or_code = (payload.get("link_or_code") or "").strip()
+        selected_ids = payload.get("account_ids") or []
+    else:
+        link_or_code = request.form.get("link_or_code", "").strip()
+        selected_ids = request.form.getlist("account_ids")
 
-    if not link_or_code:
-        flash("لطفاً لینک یا کد را وارد کنید.", "error")
-        return redirect(url_for("signatures"))
+    code = karzar_sign.parse_campaign_code(link_or_code)
+    if not code:
+        return jsonify({"ok": False, "error": "لینک یا کد کارزار معتبر نیست. نمونه: https://www.karzar.net/344536 یا 344536"}), 400
 
-    if not selected_ids:
-        flash("لطفاً حداقل یک اکانت را انتخاب کنید.", "error")
-        return redirect(url_for("signatures"))
+    try:
+        ids = {int(i) for i in selected_ids}
+    except (TypeError, ValueError):
+        ids = set()
+    if not ids:
+        return jsonify({"ok": False, "error": "حداقل یک اکانت را انتخاب کنید."}), 400
 
-    flash(f"درخواست ثبت امضا برای {len(selected_ids)} اکانت با موفقیت ارسال شد.", "success")
-    return redirect(url_for("signatures"))
+    data = get_accounts_data()
+    accounts = sorted((a for a in data["accounts"] if a["id"] in ids), key=lambda a: a["id"])
+    if not accounts:
+        return jsonify({"ok": False, "error": "اکانت انتخاب‌شده پیدا نشد."}), 400
+
+    jid = karzar_sign.start_job(code, accounts)
+    return jsonify({"ok": True, "jid": jid, "campaign_code": code})
+
+
+@app.route("/signatures/status/<jid>")
+@login_required
+def signatures_status(jid):
+    job = karzar_sign.get_job(jid)
+    if not job:
+        return jsonify({"ok": False, "error": "کار پیدا نشد."}), 404
+    return jsonify({"ok": True, "job": job})
+
+
+@app.route("/signatures/screenshot/<jid>/<int:account_id>")
+@login_required
+def signatures_screenshot(jid, account_id):
+    if not karzar_sign.get_job(jid):
+        abort(404)
+    path = karzar_sign.screenshot_path(jid, account_id)
+    if not os.path.isfile(path):
+        abort(404)
+    return send_file(path, mimetype="image/png", max_age=0)
 
 
 # --------------------------------------------------------------------------
