@@ -42,7 +42,7 @@
     </div>
 
     <!-- کارهای اخیر (در سرور اجرا می‌شوند و با بستن صفحه لغو نمی‌شوند) -->
-    <div id="sign-history" class="hidden glass-card rounded-2xl p-5 mb-6">
+    <div id="sign-history" data-is-admin="{{ 'true' if is_admin else 'false' }}" class="hidden glass-card rounded-2xl p-5 mb-6">
         <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
             <div class="flex items-center gap-3">
                 <h3 class="text-sm font-bold text-slate-700 dark:text-slate-100">کارهای اخیر</h3>

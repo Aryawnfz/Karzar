@@ -24,6 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const historyList = document.getElementById('sign-history-list');
     const historyClearBtn = document.getElementById('sign-history-clear');
     const historyMsg = document.getElementById('sign-history-msg');
+    const isAdmin = historyWrap && historyWrap.dataset.isAdmin === 'true';
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
     let jid = null;
     let pollTimer = null;
@@ -153,10 +155,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const status = running
                 ? '<span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 dark:bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500"></span>در حال انجام</span>'
                 : `<span class="inline-flex items-center gap-1.5 rounded-full ${failed ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'} px-2.5 py-1 text-[11px] font-semibold">${done} موفق${failed ? `، ${failed} ناموفق` : ''}</span>`;
+            const actor = job.actor || {};
+            const actorHtml = isAdmin
+                ? ` • توسط <span class="inline-flex items-center gap-1 font-semibold text-slate-600 dark:text-slate-300"><span class="flex h-4 w-4 items-center justify-center rounded-full bg-gradient-to-br from-secondary-400 to-secondary-600 text-[9px] font-bold text-white">${esc((actor.full_name || actor.username || '؟')[0])}</span>${esc(actor.full_name || actor.username || 'نامشخص')}${actor.username ? ` <span dir="ltr" class="font-mono text-[10px] text-slate-400">${esc(actor.username)}</span>` : ''}</span>`
+                : '';
             li.innerHTML = `
                 <div class="min-w-0">
                     <a href="${job.campaign_url}" target="_blank" rel="noopener" dir="ltr" class="font-mono text-xs text-primary-600 dark:text-primary-400 hover:underline">${job.campaign_url}</a>
-                    <p class="text-[11px] text-slate-400 dark:text-slate-500">${job.created_at} • ${job.accounts.length} اکانت</p>
+                    <p class="text-[11px] text-slate-400 dark:text-slate-500">${job.created_at} • ${job.accounts.length} اکانت${actorHtml}</p>
                 </div>
                 <div class="flex items-center gap-2">
                     ${status}

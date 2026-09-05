@@ -96,7 +96,7 @@
                     ('activity_logs', url_for('activity_logs'), 'گزارش فعالیت‌ها', 'activity'),
                 ] %}
                 {% for endpoint, href, label, icon in nav_items %}
-                    {% if endpoint != 'users_list' or current_user.role == 'admin' %}
+                    {% if endpoint not in ('users_list', 'accounts_list', 'activity_logs') or current_user.role == 'admin' %}
                     <a href="{{ href }}"
                        class="nav-item {% if request.endpoint == endpoint %}active bg-primary-50 dark:bg-primary-500/10 text-primary-700 dark:text-primary-300{% else %}text-slate-500 dark:text-slate-400 hover:bg-slate-100/70 dark:hover:bg-white/5 hover:text-slate-800 dark:hover:text-slate-100{% endif %}
                        flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium">
