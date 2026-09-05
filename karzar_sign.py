@@ -125,8 +125,26 @@ def _pid_alive(pid) -> bool:
     if not pid:
         return False
     try:
-        os.kill(int(pid), 0)
-    except (OSError, ValueError):
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if sys.platform == "win32":
+        # روی ویندوز os.kill(pid, 0) فرایند را می‌کُشد؛ پس با OpenProcess بررسی می‌کنیم.
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            still_active = kernel32.GetExitCodeProcess(handle, ctypes.byref(code)) and code.value == 259
+            return bool(still_active)
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except OSError:
         return False
     return True
 
@@ -430,6 +448,10 @@ def start_job(campaign_code: str, accounts: list, actor: Optional[dict] = None) 
 
 def _spawn_worker(jid: str) -> None:
     """اجرای کار در یک فرایندِ جدا و مستقل از وب‌سرور (بدون وابستگی به درخواست HTTP یا تب مرورگر)."""
+    if sys.platform == "win32":
+        detach = {"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP}
+    else:
+        detach = {"start_new_session": True}
     log = open(os.path.join(JOBS_DIR, f"{jid}.log"), "ab")
     try:
         subprocess.Popen(
@@ -438,8 +460,8 @@ def _spawn_worker(jid: str) -> None:
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=subprocess.STDOUT,
-            start_new_session=True,
             close_fds=True,
+            **detach,
         )
     finally:
         log.close()

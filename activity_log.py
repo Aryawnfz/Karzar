@@ -13,15 +13,16 @@
 سطح‌ها (level):   debug < info < warning < error < security
 دسته‌ها (category): auth, users, accounts, signatures, activity, http, system
 
-نوشتن با قفل فایل (flock) انجام می‌شود تا با چند worker گونیکورن و فرایندِ
-مستقلِ ثبت امضا هم سازگار باشد.
+هر رویداد در یک نوشتنِ واحد با حالت append ذخیره می‌شود (خطوط JSON کوچک)؛
+بنابراین با چند worker گونیکورن و فرایندِ مستقلِ ثبت امضا، و همچنین روی
+ویندوز و لینوکس، بدون نیاز به قفل فایل کار می‌کند.
 """
 
 import csv
-import fcntl
 import io
 import json
 import os
+import threading
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -30,6 +31,8 @@ from typing import Iterable, Optional
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 LOG_DIR = os.path.join(DATA_DIR, "activity_log")
+
+_write_lock = threading.Lock()
 
 LEVELS = ("debug", "info", "warning", "error", "security")
 LEVEL_RANK = {lv: i for i, lv in enumerate(LEVELS)}
@@ -102,7 +105,7 @@ def _context_fields() -> dict:
         "method": request.method,
         "path": request.full_path.rstrip("?") if request.query_string else request.path,
         "endpoint": request.endpoint,
-        "request_id": getattr(g, "request_id", None),
+        "request_id": g.get("request_id"),
     }
     return fields
 
@@ -156,14 +159,10 @@ def log_event(
         event.update({k: actor.get(k) for k in ("user_id", "username", "full_name", "role") if actor.get(k) is not None})
 
     _ensure_dir()
-    line = json.dumps(event, ensure_ascii=False) + "\n"
-    with open(_file_for(now), "a", encoding="utf-8") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
-        try:
+    line = (json.dumps(event, ensure_ascii=False) + "\n").encode("utf-8")
+    with _write_lock:
+        with open(_file_for(now), "ab") as f:
             f.write(line)
-            f.flush()
-        finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
     return event
 
 
