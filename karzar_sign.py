@@ -17,6 +17,7 @@ import asyncio
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -148,6 +149,8 @@ def _reconcile(job: dict) -> dict:
     job["status"] = J_FINISHED
     job["finished_at"] = datetime.now().strftime("%Y/%m/%d %H:%M")
     _save_job(job)
+    _log(job, "signatures.worker_died", f"فرایند ثبت امضای کارزار {job['campaign_code']} به‌طور غیرمنتظره متوقف شد",
+         level="error", pid=pid)
     return job
 
 
@@ -168,6 +171,26 @@ def list_jobs(limit: int = 10) -> list:
             jobs.append(job)
     jobs.sort(key=lambda j: j.get("started_ts", 0), reverse=True)
     return jobs[:limit]
+
+
+def delete_job(jid: str) -> bool:
+    """حذف فایل وضعیت، لاگ و اسکرین‌شات‌های یک کار. کارِ در حال اجرا حذف نمی‌شود."""
+    job = get_job(jid)
+    if not job or job.get("status") == J_RUNNING:
+        return False
+    with _file_lock:
+        for path in (_job_path(jid), os.path.join(JOBS_DIR, f"{jid}.log")):
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+    shutil.rmtree(os.path.join(SHOTS_DIR, jid), ignore_errors=True)
+    return True
+
+
+def delete_all_jobs() -> int:
+    """حذف همهٔ کارهای پایان‌یافته؛ تعداد حذف‌شده‌ها را برمی‌گرداند."""
+    return sum(1 for j in list_jobs(limit=10_000) if delete_job(j["id"]))
 
 
 def _update_account(job: dict, acc_id, **fields) -> None:
@@ -313,37 +336,76 @@ async def _is_visible(page, selector: str) -> bool:
         return False
 
 
+def _log(job: dict, action: str, message: str, level: str = "info", **details) -> None:
+    """ثبت رویداد کار در گزارش فعالیت‌ها (از داخل فرایند مستقل)."""
+    try:
+        from activity_log import log_event
+
+        log_event(
+            action, message, level=level, category="signatures",
+            actor=job.get("actor") or None,
+            details={"jid": job["id"], "campaign_code": job["campaign_code"], **details},
+        )
+    except Exception as exc:  # لاگ نباید کار را متوقف کند
+        print(f"activity log failed: {exc}", file=sys.stderr)
+
+
 async def _run_job(job: dict) -> None:
+    t0 = time.monotonic()
+    _log(job, "signatures.worker_start", f"فرایند ثبت امضای کارزار {job['campaign_code']} آغاز شد",
+         pid=os.getpid(), accounts=len(job["accounts"]))
     try:
         async with async_playwright() as p:
             for acc in job["accounts"]:
-                if acc["status"] == A_PENDING:
-                    await _sign_one(p, job, acc)
+                if acc["status"] != A_PENDING:
+                    continue
+                t1 = time.monotonic()
+                await _sign_one(p, job, acc)
+                ok = acc["status"] == A_DONE
+                _log(job,
+                     "signatures.account_done" if ok else "signatures.account_failed",
+                     f"اکانت «{acc['name']}»: {acc.get('message')}",
+                     level="info" if ok else "error",
+                     account_id=acc["id"], account_name=acc["name"], identifier=acc.get("identifier"),
+                     result=acc["status"], duration_s=round(time.monotonic() - t1, 1))
     except Exception as exc:
         for a in job["accounts"]:
             if a["status"] in (A_PENDING, A_RUNNING):
                 a["status"] = A_FAILED
                 a["message"] = str(exc)
+        _log(job, "signatures.worker_crash", f"خطای کلی در فرایند ثبت امضا: {exc}", level="error", error=str(exc)[:500])
     job["status"] = J_FINISHED
     job["finished_at"] = datetime.now().strftime("%Y/%m/%d %H:%M")
     _save_job(job)
+    done = sum(1 for a in job["accounts"] if a["status"] == A_DONE)
+    failed = len(job["accounts"]) - done
+    _log(job, "signatures.job_finished",
+         f"ثبت امضای کارزار {job['campaign_code']} پایان یافت: {done} موفق، {failed} ناموفق",
+         level="info" if failed == 0 else "warning",
+         done=done, failed=failed, duration_s=round(time.monotonic() - t0, 1))
 
 
 # --------------------------------------------------------------------------
 # API عمومی
 # --------------------------------------------------------------------------
-def start_job(campaign_code: str, accounts: list) -> str:
+def campaign_url(campaign_code: str) -> str:
+    return KARZAR_CAMPAIGN_URL.format(code=campaign_code)
+
+
+def start_job(campaign_code: str, accounts: list, actor: Optional[dict] = None) -> str:
     """
     شروع ثبت امضای نوبتی برای فهرست اکانت‌ها. شناسهٔ job را برمی‌گرداند.
     accounts: لیست دیکشنری‌های اکانت از data/accounts.json
+    actor: کاربرِ درخواست‌دهنده (برای گزارش فعالیت‌ها)
     """
     jid = uuid.uuid4().hex
     job = {
         "id": jid,
         "campaign_code": campaign_code,
-        "campaign_url": KARZAR_CAMPAIGN_URL.format(code=campaign_code),
+        "campaign_url": campaign_url(campaign_code),
         "status": J_RUNNING,
         "pid": None,
+        "actor": actor or {},
         "started_ts": time.time(),
         "created_at": datetime.now().strftime("%Y/%m/%d %H:%M"),
         "finished_at": None,

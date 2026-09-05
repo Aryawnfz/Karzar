@@ -22,6 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressBar = document.getElementById('sign-progress-bar');
     const historyWrap = document.getElementById('sign-history');
     const historyList = document.getElementById('sign-history-list');
+    const historyClearBtn = document.getElementById('sign-history-clear');
+    const historyMsg = document.getElementById('sign-history-msg');
 
     let jid = null;
     let pollTimer = null;
@@ -159,9 +161,68 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="flex items-center gap-2">
                     ${status}
                     <button type="button" data-view-job="${job.id}" class="rounded-lg border border-slate-200 dark:border-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5">مشاهده</button>
+                    <button type="button" data-delete-job="${job.id}" ${running ? 'disabled title="کار در حال اجرا قابل حذف نیست"' : 'title="حذف این کار"'} class="rounded-lg border border-red-200 dark:border-red-500/20 px-2.5 py-1 text-[11px] font-semibold text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-40 disabled:cursor-not-allowed">حذف</button>
                 </div>`;
             historyList.appendChild(li);
         });
+        if (historyClearBtn) {
+            const anyDeletable = jobs.some((j) => j.status === 'finished');
+            historyClearBtn.disabled = !anyDeletable;
+            historyClearBtn.classList.toggle('opacity-40', !anyDeletable);
+            historyClearBtn.classList.toggle('cursor-not-allowed', !anyDeletable);
+        }
+    }
+
+    function historyNotice(text, isError) {
+        if (!historyMsg) return;
+        historyMsg.textContent = text || '';
+        historyMsg.classList.toggle('hidden', !text);
+        historyMsg.classList.toggle('text-red-500', !!isError);
+        historyMsg.classList.toggle('text-emerald-600', !isError);
+        if (text) setTimeout(() => historyMsg.classList.add('hidden'), 4000);
+    }
+
+    function clearProgressIfDeleted(deletedIds) {
+        if (jid && deletedIds.includes(jid)) {
+            stopPolling();
+            jid = null;
+            progress.classList.add('hidden');
+            resetCards();
+        }
+    }
+
+    async function deleteJob(id) {
+        try {
+            const res = await fetch(`/signatures/jobs/${id}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok || !data.ok) {
+                historyNotice(data.error || 'حذف انجام نشد.', true);
+            } else {
+                clearProgressIfDeleted([id]);
+                historyNotice('کار حذف شد.');
+            }
+        } catch (e) {
+            historyNotice('ارتباط با سرور برقرار نشد.', true);
+        }
+        await loadHistory();
+    }
+
+    async function deleteAllJobs() {
+        try {
+            const res = await fetch('/signatures/jobs', { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok || !data.ok) {
+                historyNotice(data.error || 'حذف انجام نشد.', true);
+            } else {
+                if (jid && !running) clearProgressIfDeleted([jid]);
+                historyNotice(data.skipped
+                    ? `${data.deleted} کار حذف شد؛ ${data.skipped} کار در حال اجرا نگه داشته شد.`
+                    : `${data.deleted} کار حذف شد.`);
+            }
+        } catch (e) {
+            historyNotice('ارتباط با سرور برقرار نشد.', true);
+        }
+        await loadHistory();
     }
 
     async function fetchJob(id) {
@@ -227,10 +288,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (historyList) {
         historyList.addEventListener('click', async (e) => {
+            const del = e.target.closest('[data-delete-job]');
+            if (del) {
+                if (del.disabled) return;
+                if (!confirm('این کار و اسکرین‌شات‌های آن حذف شود؟')) return;
+                del.disabled = true;
+                await deleteJob(del.dataset.deleteJob);
+                return;
+            }
             const btn = e.target.closest('[data-view-job]');
             if (!btn || running) return;
             const job = await fetchJob(btn.dataset.viewJob);
             if (job) attachJob(job);
+        });
+    }
+
+    if (historyClearBtn) {
+        historyClearBtn.addEventListener('click', async () => {
+            if (historyClearBtn.disabled) return;
+            if (!confirm('همهٔ کارهای اخیر (به‌جز کارهای در حال اجرا) با اسکرین‌شات‌هایشان حذف شوند؟')) return;
+            historyClearBtn.disabled = true;
+            await deleteAllJobs();
         });
     }
 
