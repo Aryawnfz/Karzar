@@ -2,8 +2,12 @@
 """
 ثبت امضا در کارزار (karzar.net) با Playwright و پروفایل ذخیره‌شدهٔ هر اکانت.
 
-هر «کار» (job) وضعیتش را روی دیسک نگه می‌دارد تا با Gunicorn چند-worker کار کند:
+هر «کار» (job) در یک فرایندِ مستقل از وب‌سرور اجرا می‌شود
+(`python karzar_sign.py --run <jid>`) و وضعیتش را روی دیسک نگه می‌دارد؛
+بنابراین بستن تب مرورگر، رفتن به صفحهٔ دیگر یا ری‌استارت شدنِ worker های
+Gunicorn آن را متوقف نمی‌کند:
   data/sign_jobs/<jid>.json            ← وضعیت کل کار و هر اکانت
+  data/sign_jobs/<jid>.log             ← خروجی فرایندِ اجراکننده
   data/screenshots/<jid>/<acc_id>.png  ← اسکرین‌شات پیغام موفقیت هر اکانت
 
 اکانت‌ها نوبت به نوبت (یکی پس از دیگری) امضا می‌کنند.
@@ -13,6 +17,8 @@ import asyncio
 import json
 import os
 import re
+import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -101,7 +107,7 @@ def _save_job(job: dict) -> None:
         os.replace(tmp, _job_path(job["id"]))
 
 
-def get_job(jid: str) -> Optional[dict]:
+def _read_job(jid: str) -> Optional[dict]:
     if not re.fullmatch(r"[0-9a-f]{32}", jid or ""):
         return None
     path = _job_path(jid)
@@ -114,31 +120,62 @@ def get_job(jid: str) -> Optional[dict]:
         return None
 
 
+def _pid_alive(pid) -> bool:
+    if not pid:
+        return False
+    try:
+        os.kill(int(pid), 0)
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def _reconcile(job: dict) -> dict:
+    """اگر فرایندِ اجراکنندهٔ کار دیگر زنده نباشد ولی وضعیت «در حال اجرا» مانده باشد، کار را بسته اعلام می‌کند."""
+    if job.get("status") != J_RUNNING:
+        return job
+    started = job.get("started_ts") or 0
+    pid = job.get("pid")
+    # به فرایند تازه‌شروع‌شده چند ثانیه فرصت بده تا pid خود را بنویسد
+    if pid is None and time.time() - started < 30:
+        return job
+    if _pid_alive(pid):
+        return job
+    for a in job["accounts"]:
+        if a["status"] in (A_PENDING, A_RUNNING):
+            a["status"] = A_FAILED
+            a["message"] = "فرایند ثبت امضا به‌طور غیرمنتظره متوقف شد."
+    job["status"] = J_FINISHED
+    job["finished_at"] = datetime.now().strftime("%Y/%m/%d %H:%M")
+    _save_job(job)
+    return job
+
+
+def get_job(jid: str) -> Optional[dict]:
+    job = _read_job(jid)
+    return _reconcile(job) if job else None
+
+
+def list_jobs(limit: int = 10) -> list:
+    """فهرست کارهای اخیر (جدیدترین اول)."""
+    _ensure_dirs()
+    jobs = []
+    for name in os.listdir(JOBS_DIR):
+        if not name.endswith(".json"):
+            continue
+        job = get_job(name[:-5])
+        if job:
+            jobs.append(job)
+    jobs.sort(key=lambda j: j.get("started_ts", 0), reverse=True)
+    return jobs[:limit]
+
+
 def _update_account(job: dict, acc_id, **fields) -> None:
     for a in job["accounts"]:
         if a["id"] == acc_id:
             a.update(fields)
             break
     _save_job(job)
-
-
-# --------------------------------------------------------------------------
-# event loop پس‌زمینه
-# --------------------------------------------------------------------------
-_loop: Optional[asyncio.AbstractEventLoop] = None
-_bg_thread: Optional[threading.Thread] = None
-_loop_lock = threading.Lock()
-
-
-def _ensure_loop() -> asyncio.AbstractEventLoop:
-    global _loop, _bg_thread
-    with _loop_lock:
-        if _loop is None or _bg_thread is None or not _bg_thread.is_alive():
-            _loop = asyncio.new_event_loop()
-            _bg_thread = threading.Thread(target=_loop.run_forever, daemon=True, name="karzar-sign-loop")
-            _bg_thread.start()
-            time.sleep(0.1)
-    return _loop
 
 
 # --------------------------------------------------------------------------
@@ -280,7 +317,8 @@ async def _run_job(job: dict) -> None:
     try:
         async with async_playwright() as p:
             for acc in job["accounts"]:
-                await _sign_one(p, job, acc)
+                if acc["status"] == A_PENDING:
+                    await _sign_one(p, job, acc)
     except Exception as exc:
         for a in job["accounts"]:
             if a["status"] in (A_PENDING, A_RUNNING):
@@ -305,6 +343,8 @@ def start_job(campaign_code: str, accounts: list) -> str:
         "campaign_code": campaign_code,
         "campaign_url": KARZAR_CAMPAIGN_URL.format(code=campaign_code),
         "status": J_RUNNING,
+        "pid": None,
+        "started_ts": time.time(),
         "created_at": datetime.now().strftime("%Y/%m/%d %H:%M"),
         "finished_at": None,
         "accounts": [
@@ -322,6 +362,40 @@ def start_job(campaign_code: str, accounts: list) -> str:
         ],
     }
     _save_job(job)
-    loop = _ensure_loop()
-    asyncio.run_coroutine_threadsafe(_run_job(job), loop)
+    _spawn_worker(jid)
     return jid
+
+
+def _spawn_worker(jid: str) -> None:
+    """اجرای کار در یک فرایندِ جدا و مستقل از وب‌سرور (بدون وابستگی به درخواست HTTP یا تب مرورگر)."""
+    log = open(os.path.join(JOBS_DIR, f"{jid}.log"), "ab")
+    try:
+        subprocess.Popen(
+            [sys.executable, os.path.abspath(__file__), "--run", jid],
+            cwd=BASE_DIR,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            close_fds=True,
+        )
+    finally:
+        log.close()
+
+
+def _worker_main(jid: str) -> int:
+    job = _read_job(jid)
+    if not job:
+        print(f"job {jid} not found", file=sys.stderr)
+        return 1
+    job["pid"] = os.getpid()
+    _save_job(job)
+    asyncio.run(_run_job(job))
+    return 0
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 3 and sys.argv[1] == "--run":
+        sys.exit(_worker_main(sys.argv[2]))
+    print("usage: python karzar_sign.py --run <jid>", file=sys.stderr)
+    sys.exit(2)
