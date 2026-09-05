@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}گزارش فعالیت‌ها | سامانه مدیریت{% endblock %}
+{% block page_title %}گزارش فعالیت‌ها{% endblock %}
+
+{% block content %}
+<div id="activity-page"
+     data-is-admin="{{ 'true' if is_admin else 'false' }}"
+     data-users='{{ users | tojson }}'
+     data-levels='{{ levels | tojson }}'
+     data-categories='{{ categories | tojson }}'>
+
+    <!-- نوار بالا: وضعیت زنده + خروجی -->
+    <div class="animate-in mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+            <span id="act-live-dot" class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                <span id="act-total" class="font-bold text-slate-800 dark:text-white">0</span> رویداد مطابق فیلتر
+                <span id="act-range" class="text-slate-400 dark:text-slate-500"></span>
+            </p>
+            <span id="act-loading" class="hidden h-4 w-4 animate-spin rounded-full border-2 border-primary-500 border-t-transparent"></span>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <label class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                <input type="checkbox" id="act-live" class="accent-primary-500" checked>
+                به‌روزرسانی زنده
+            </label>
+            <button type="button" id="act-refresh" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+                بازخوانی
+            </button>
+            <a id="act-export-csv" href="{{ url_for('activity_export', fmt='csv') }}" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                خروجی CSV
+            </a>
+            <a id="act-export-json" href="{{ url_for('activity_export', fmt='json') }}" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1"/><path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"/></svg>
+                خروجی JSON
+            </a>
+            {% if is_admin %}
+            <button type="button" id="act-clear" class="inline-flex items-center gap-1.5 rounded-xl border border-red-200 dark:border-red-500/20 px-3 py-2 text-xs font-semibold text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                پاک‌سازی کل لاگ‌ها
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- کارت‌های آمار -->
+    <div class="animate-in stagger-1 mb-6 grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8">
+        {% set kpis = [
+            ('total', 'کل رویدادها', 'from-primary-500 to-primary-700'),
+            ('info', 'اطلاع', 'from-sky-400 to-sky-600'),
+            ('warning', 'هشدار', 'from-amber-400 to-amber-600'),
+            ('error', 'خطا', 'from-red-400 to-red-600'),
+            ('security', 'امنیتی', 'from-fuchsia-400 to-fuchsia-600'),
+            ('users', 'کاربران فعال', 'from-secondary-400 to-secondary-600'),
+            ('avg', 'میانگین پاسخ', 'from-teal-400 to-teal-600'),
+            ('p95', 'پاسخ P95', 'from-indigo-400 to-indigo-600'),
+        ] %}
+        {% for key, label, grad in kpis %}
+        <div class="glass-card rounded-2xl p-4">
+            <div class="mb-2 h-1 w-8 rounded-full bg-gradient-to-l {{ grad }}"></div>
+            <p class="text-[11px] font-semibold text-slate-400 dark:text-slate-500">{{ label }}</p>
+            <p id="kpi-{{ key }}" class="mt-1 text-xl font-bold text-slate-800 dark:text-white" dir="ltr">—</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- فیلترها -->
+    <div class="animate-in stagger-2 glass-card mb-6 rounded-2xl p-5">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h3 class="text-sm font-bold text-slate-700 dark:text-slate-100">فیلترها</h3>
+            <div class="flex flex-wrap items-center gap-1.5 text-[11px]">
+                <span class="text-slate-400 dark:text-slate-500">بازهٔ سریع:</span>
+                {% for key, label in [('1h','۱ ساعت'), ('24h','۲۴ ساعت'), ('7d','۷ روز'), ('30d','۳۰ روز'), ('all','همه')] %}
+                <button type="button" data-quick-range="{{ key }}" class="rounded-lg border border-slate-200 dark:border-white/10 px-2.5 py-1 font-semibold text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5">{{ label }}</button>
+                {% endfor %}
+                <button type="button" id="act-reset" class="ms-2 rounded-lg px-2.5 py-1 font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">حذف فیلترها</button>
+            </div>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-3">
+            <!-- کاربران (چند انتخابی) -->
+            <div class="lg:col-span-1">
+                <div class="mb-2 flex items-center justify-between">
+                    <label class="text-xs font-bold text-slate-600 dark:text-slate-300">کاربران <span class="font-normal text-slate-400">(یک یا چند نفر)</span></label>
+                    {% if is_admin %}
+                    <div class="flex gap-2 text-[11px]">
+                        <button type="button" id="act-users-all" class="text-primary-600 dark:text-primary-400 hover:underline">همه</button>
+                        <button type="button" id="act-users-none" class="text-slate-400 hover:underline">هیچ</button>
+                    </div>
+                    {% endif %}
+                </div>
+                <input type="text" id="act-user-search" placeholder="جستجوی کاربر..." class="input-field mb-2 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2 text-xs text-slate-700 dark:text-slate-100 outline-none focus:border-primary-400">
+                <div id="act-users" class="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-slate-200 dark:border-white/10 bg-white/40 dark:bg-white/[0.03] p-2"></div>
+            </div>
+
+            <!-- سطح و دسته -->
+            <div class="lg:col-span-1 space-y-4">
+                <div>
+                    <label class="mb-2 block text-xs font-bold text-slate-600 dark:text-slate-300">سطح</label>
+                    <div id="act-levels" class="flex flex-wrap gap-1.5"></div>
+                </div>
+                <div>
+                    <label class="mb-2 block text-xs font-bold text-slate-600 dark:text-slate-300">دسته</label>
+                    <div id="act-categories" class="flex flex-wrap gap-1.5"></div>
+                </div>
+            </div>
+
+            <!-- جستجو و تاریخ -->
+            <div class="lg:col-span-1 space-y-3">
+                <div>
+                    <label class="mb-2 block text-xs font-bold text-slate-600 dark:text-slate-300">جستجو</label>
+                    <input type="text" id="act-q" placeholder="متن، عمل، IP، مسیر، شناسهٔ درخواست..." class="input-field w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2.5 text-xs text-slate-700 dark:text-slate-100 outline-none focus:border-primary-400">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="mb-1 block text-[11px] font-bold text-slate-500 dark:text-slate-400">از</label>
+                        <input type="datetime-local" id="act-from" dir="ltr" class="input-field w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2 text-xs text-slate-700 dark:text-slate-100 outline-none focus:border-primary-400">
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-[11px] font-bold text-slate-500 dark:text-slate-400">تا</label>
+                        <input type="datetime-local" id="act-to" dir="ltr" class="input-field w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2 text-xs text-slate-700 dark:text-slate-100 outline-none focus:border-primary-400">
+                    </div>
+                </div>
+                <label class="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <input type="checkbox" id="act-debug" class="accent-primary-500">
+                    نمایش رویدادهای «جزئیات» (درخواست‌های GET/poll و فایل‌های استاتیک)
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- نمودارها -->
+    <div class="animate-in stagger-3 mb-6 grid gap-4 xl:grid-cols-3">
+        <div class="glass-card rounded-2xl p-5 xl:col-span-2">
+            <div class="mb-3 flex items-center justify-between">
+                <h3 class="text-sm font-bold text-slate-700 dark:text-slate-100">روند فعالیت در زمان</h3>
+                <span id="act-granularity" class="text-[11px] text-slate-400 dark:text-slate-500"></span>
+            </div>
+            <div class="h-64"><canvas id="chart-timeline"></canvas></div>
+        </div>
+        <div class="glass-card rounded-2xl p-5">
+            <h3 class="mb-3 text-sm font-bold text-slate-700 dark:text-slate-100">توزیع سطح رویدادها</h3>
+            <div class="h-64"><canvas id="chart-levels"></canvas></div>
+        </div>
+        <div class="glass-card rounded-2xl p-5">
+            <h3 class="mb-3 text-sm font-bold text-slate-700 dark:text-slate-100">فعالیت به‌ازای کاربر</h3>
+            <div class="h-64"><canvas id="chart-users"></canvas></div>
+        </div>
+        <div class="glass-card rounded-2xl p-5">
+            <h3 class="mb-3 text-sm font-bold text-slate-700 dark:text-slate-100">دسته‌بندی فعالیت‌ها</h3>
+            <div class="h-64"><canvas id="chart-categories"></canvas></div>
+        </div>
+        <div class="glass-card rounded-2xl p-5">
+            <h3 class="mb-3 text-sm font-bold text-slate-700 dark:text-slate-100">پرتکرارترین عمل‌ها</h3>
+            <div class="h-64"><canvas id="chart-actions"></canvas></div>
+        </div>
+    </div>
+
+    <!-- جدول رویدادها -->
+    <div class="animate-in stagger-4 glass-card rounded-2xl overflow-hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-white/5 px-5 py-4">
+            <h3 class="text-sm font-bold text-slate-700 dark:text-slate-100">رویدادها</h3>
+            <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <span>در هر صفحه</span>
+                <select id="act-per-page" class="rounded-lg border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-2 py-1 text-xs text-slate-700 dark:text-slate-100 outline-none">
+                    <option>25</option><option selected>50</option><option>100</option><option>250</option>
+                </select>
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+                <thead class="bg-slate-50/60 dark:bg-white/[0.03] text-[11px] text-slate-400 dark:text-slate-500">
+                    <tr>
+                        <th class="px-4 py-3 text-start font-semibold">زمان</th>
+                        <th class="px-3 py-3 text-start font-semibold">سطح</th>
+                        <th class="px-3 py-3 text-start font-semibold">دسته</th>
+                        <th class="px-3 py-3 text-start font-semibold">کاربر</th>
+                        <th class="px-3 py-3 text-start font-semibold">عمل</th>
+                        <th class="px-3 py-3 text-start font-semibold">شرح</th>
+                        <th class="px-3 py-3 text-start font-semibold">IP</th>
+                        <th class="px-3 py-3 text-start font-semibold">وضعیت</th>
+                        <th class="px-3 py-3 text-start font-semibold">زمان پاسخ</th>
+                        <th class="px-3 py-3"></th>
+                    </tr>
+                </thead>
+                <tbody id="act-rows" class="divide-y divide-slate-100 dark:divide-white/5"></tbody>
+            </table>
+            <div id="act-empty" class="hidden px-5 py-12 text-center text-sm text-slate-400 dark:text-slate-500">رویدادی مطابق این فیلترها پیدا نشد.</div>
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 dark:border-white/5 px-5 py-3 text-xs text-slate-500 dark:text-slate-400">
+            <span id="act-page-info"></span>
+            <div class="flex items-center gap-1">
+                <button type="button" id="act-first" class="rounded-lg border border-slate-200 dark:border-white/10 px-2.5 py-1 font-semibold hover:bg-slate-50 dark:hover:bg-white/5 disabled:opacity-40">اول</button>
+                <button type="button" id="act-prev" class="rounded-lg border border-slate-200 dark:border-white/10 px-2.5 py-1 font-semibold hover:bg-slate-50 dark:hover:bg-white/5 disabled:opacity-40">قبلی</button>
+                <span id="act-page-num" class="px-2 font-bold text-slate-700 dark:text-slate-100"></span>
+                <button type="button" id="act-next" class="rounded-lg border border-slate-200 dark:border-white/10 px-2.5 py-1 font-semibold hover:bg-slate-50 dark:hover:bg-white/5 disabled:opacity-40">بعدی</button>
+                <button type="button" id="act-last" class="rounded-lg border border-slate-200 dark:border-white/10 px-2.5 py-1 font-semibold hover:bg-slate-50 dark:hover:bg-white/5 disabled:opacity-40">آخر</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/activity_logs.js') }}"></script>
+{% endblock %}

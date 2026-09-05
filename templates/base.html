@@ -93,6 +93,7 @@
                     ('users_list', url_for('users_list'), 'مدیریت کاربران', 'users'),
                     ('accounts_list', url_for('accounts_list'), 'مدیریت اکانت‌ها', 'briefcase'),
                     ('signatures', url_for('signatures'), 'ثبت امضا', 'pen'),
+                    ('activity_logs', url_for('activity_logs'), 'گزارش فعالیت‌ها', 'activity'),
                 ] %}
                 {% for endpoint, href, label, icon in nav_items %}
                     {% if endpoint != 'users_list' or current_user.role == 'admin' %}
@@ -108,6 +109,8 @@
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
                             {% elif icon == 'pen' %}
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+                            {% elif icon == 'activity' %}
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
                             {% endif %}
                         </span>
                         <span>{{ label }}</span>
