@@ -451,6 +451,12 @@ def signatures_submit():
     return jsonify({"ok": True, "jid": jid, "campaign_code": code})
 
 
+@app.route("/signatures/jobs")
+@login_required
+def signatures_jobs():
+    return jsonify({"ok": True, "jobs": karzar_sign.list_jobs(limit=10)})
+
+
 @app.route("/signatures/status/<jid>")
 @login_required
 def signatures_status(jid):

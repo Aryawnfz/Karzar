@@ -1,5 +1,6 @@
 // ============================================================
-// ثبت امضا: شروع کار در پس‌زمینه → پایش وضعیت → نمایش نتیجه روی کارت هر اکانت
+// ثبت امضا: شروع کار در سرور → پایش وضعیت → نمایش نتیجه روی کارت هر اکانت
+// کار در سرور مستقل از این صفحه اجرا می‌شود؛ با باز شدن دوبارهٔ صفحه به کار جاری/آخرین کار وصل می‌شویم.
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('signature-form');
@@ -19,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressFailedWrap = document.getElementById('sign-progress-failed-wrap');
     const progressFailed = document.getElementById('sign-progress-failed');
     const progressBar = document.getElementById('sign-progress-bar');
+    const historyWrap = document.getElementById('sign-history');
+    const historyList = document.getElementById('sign-history-list');
 
     let jid = null;
     let pollTimer = null;
@@ -118,12 +121,67 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    document.querySelectorAll('[data-account-card]').forEach((card) => {
+        const badge = card.querySelector('[data-sign-badge]');
+        card.dataset.originalBadge = badge.outerHTML;
+    });
+
     function resetCards() {
         document.querySelectorAll('[data-account-card]').forEach((card) => {
+            if (card.dataset.originalBadge) {
+                card.querySelector('[data-sign-badge]').outerHTML = card.dataset.originalBadge;
+            }
             card.querySelector('[data-sign-result]').classList.add('hidden');
             card.querySelector('[data-sign-shot-link]').classList.add('hidden');
             card.querySelector('[data-sign-shot]').removeAttribute('src');
         });
+    }
+
+    function renderHistory(jobs) {
+        if (!historyWrap || !historyList) return;
+        if (!jobs.length) return historyWrap.classList.add('hidden');
+        historyWrap.classList.remove('hidden');
+        historyList.innerHTML = '';
+        jobs.forEach((job) => {
+            const done = job.accounts.filter((a) => a.status === 'done').length;
+            const failed = job.accounts.filter((a) => a.status === 'failed').length;
+            const running = job.status !== 'finished';
+            const li = document.createElement('li');
+            li.className = 'flex flex-wrap items-center justify-between gap-2 py-2.5';
+            const status = running
+                ? '<span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 dark:bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500"></span>در حال انجام</span>'
+                : `<span class="inline-flex items-center gap-1.5 rounded-full ${failed ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'} px-2.5 py-1 text-[11px] font-semibold">${done} موفق${failed ? `، ${failed} ناموفق` : ''}</span>`;
+            li.innerHTML = `
+                <div class="min-w-0">
+                    <a href="${job.campaign_url}" target="_blank" rel="noopener" dir="ltr" class="font-mono text-xs text-primary-600 dark:text-primary-400 hover:underline">${job.campaign_url}</a>
+                    <p class="text-[11px] text-slate-400 dark:text-slate-500">${job.created_at} • ${job.accounts.length} اکانت</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    ${status}
+                    <button type="button" data-view-job="${job.id}" class="rounded-lg border border-slate-200 dark:border-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5">مشاهده</button>
+                </div>`;
+            historyList.appendChild(li);
+        });
+    }
+
+    async function fetchJob(id) {
+        const res = await fetch(`/signatures/status/${id}`, { cache: 'no-store' });
+        if (res.status === 404) return null;
+        const data = await res.json();
+        return data.ok ? data.job : null;
+    }
+
+    function attachJob(job) {
+        jid = job.id;
+        resetCards();
+        renderJob(job);
+        if (job.status === 'finished') {
+            stopPolling();
+            setRunning(false);
+        } else {
+            setRunning(true);
+            startPolling();
+        }
     }
 
     function stopPolling() {
@@ -136,25 +194,51 @@ document.addEventListener('DOMContentLoaded', () => {
         pollTimer = setInterval(async () => {
             if (!jid) return stopPolling();
             try {
-                const res = await fetch(`/signatures/status/${jid}`, { cache: 'no-store' });
-                if (res.status === 404) {
+                const job = await fetchJob(jid);
+                if (!job) {
                     stopPolling();
                     setRunning(false);
                     showError('کار ثبت امضا پیدا نشد.');
                     return;
                 }
-                const data = await res.json();
-                if (!data.ok) return;
-                renderJob(data.job);
-                if (data.job.status === 'finished') {
+                renderJob(job);
+                if (job.status === 'finished') {
                     stopPolling();
                     setRunning(false);
+                    loadHistory();
                 }
             } catch (e) {
                 /* خطای شبکهٔ موقتی؛ در نوبت بعد دوباره تلاش می‌شود */
             }
         }, 1500);
     }
+
+    async function loadHistory() {
+        try {
+            const res = await fetch('/signatures/jobs', { cache: 'no-store' });
+            const data = await res.json();
+            if (!data.ok) return [];
+            renderHistory(data.jobs);
+            return data.jobs;
+        } catch (e) {
+            return [];
+        }
+    }
+
+    if (historyList) {
+        historyList.addEventListener('click', async (e) => {
+            const btn = e.target.closest('[data-view-job]');
+            if (!btn || running) return;
+            const job = await fetchJob(btn.dataset.viewJob);
+            if (job) attachJob(job);
+        });
+    }
+
+    // با باز شدن صفحه: اگر کاری در سرور در حال اجرا باشد به آن وصل می‌شویم؛ وگرنه نتیجهٔ آخرین کار را نشان می‌دهیم.
+    loadHistory().then((jobs) => {
+        const active = jobs.find((j) => j.status !== 'finished') || jobs[0];
+        if (active) attachJob(active);
+    });
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -182,6 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             jid = data.jid;
             startPolling();
+            loadHistory();
         } catch (err) {
             setRunning(false);
             showError('ارتباط با سرور برقرار نشد.');
