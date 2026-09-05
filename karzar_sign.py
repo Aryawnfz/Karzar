@@ -206,11 +206,6 @@ def delete_job(jid: str) -> bool:
     return True
 
 
-def delete_all_jobs() -> int:
-    """حذف همهٔ کارهای پایان‌یافته؛ تعداد حذف‌شده‌ها را برمی‌گرداند."""
-    return sum(1 for j in list_jobs(limit=10_000) if delete_job(j["id"]))
-
-
 def _update_account(job: dict, acc_id, **fields) -> None:
     for a in job["accounts"]:
         if a["id"] == acc_id:

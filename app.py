@@ -410,7 +410,7 @@ def users_delete(user_id):
 # مسیرها: مدیریت اکانت‌های کارزار
 # --------------------------------------------------------------------------
 @app.route("/accounts")
-@login_required
+@admin_required
 def accounts_list():
     data = get_accounts_data()
     accounts = sorted(data["accounts"], key=lambda a: a["id"])
@@ -451,7 +451,7 @@ def _append_account(name, identifier, user_data_dir, actor=None):
 
 
 @app.route("/accounts/add/start", methods=["POST"])
-@login_required
+@admin_required
 def accounts_add_start():
     payload = request.get_json(silent=True) or request.form
     name = (payload.get("name") or "").strip()
@@ -477,13 +477,13 @@ def accounts_add_start():
 
 
 @app.route("/accounts/add/status/<sid>")
-@login_required
+@admin_required
 def accounts_add_status(sid):
     return jsonify(karzar_login.get_status(sid))
 
 
 @app.route("/accounts/add/otp/<sid>", methods=["POST"])
-@login_required
+@admin_required
 def accounts_add_otp(sid):
     payload = request.get_json(silent=True) or request.form
     code = (payload.get("code") or "").strip()
@@ -498,7 +498,7 @@ def accounts_add_otp(sid):
 
 
 @app.route("/accounts/add/cancel/<sid>", methods=["POST"])
-@login_required
+@admin_required
 def accounts_add_cancel(sid):
     karzar_login.cancel(sid)
     log_event("accounts.login_cancel", "لغو فرایند ورود اکانت کارزار", level="warning", category="accounts", details={"sid": sid})
@@ -506,7 +506,7 @@ def accounts_add_cancel(sid):
 
 
 @app.route("/accounts/delete/<int:account_id>", methods=["POST"])
-@login_required
+@admin_required
 def accounts_delete(account_id):
     with _accounts_lock:
         data = get_accounts_data()
@@ -533,12 +533,26 @@ def accounts_delete(account_id):
 # --------------------------------------------------------------------------
 # مسیرها: ثبت امضا (با Playwright و پروفایل هر اکانت)
 # --------------------------------------------------------------------------
+def _is_admin() -> bool:
+    return session.get("role") == "admin"
+
+
+def _job_visible(job: dict) -> bool:
+    """ادمین همهٔ کارها را می‌بیند؛ کاربر عادی فقط کارهایی را که خودش شروع کرده."""
+    return _is_admin() or (job.get("actor") or {}).get("user_id") == session.get("user_id")
+
+
+def _visible_job(jid: str):
+    job = karzar_sign.get_job(jid)
+    return job if job and _job_visible(job) else None
+
+
 @app.route("/signatures")
 @login_required
 def signatures():
     data = get_accounts_data()
     accounts = sorted(data["accounts"], key=lambda a: a["id"])
-    return render_template("signatures.html", accounts=accounts)
+    return render_template("signatures.html", accounts=accounts, is_admin=_is_admin())
 
 
 @app.route("/signatures/submit", methods=["POST"])
@@ -580,13 +594,14 @@ def signatures_submit():
 @app.route("/signatures/jobs")
 @login_required
 def signatures_jobs():
-    return jsonify({"ok": True, "jobs": karzar_sign.list_jobs(limit=10)})
+    jobs = [j for j in karzar_sign.list_jobs(limit=10_000) if _job_visible(j)]
+    return jsonify({"ok": True, "jobs": jobs[:10]})
 
 
 @app.route("/signatures/jobs/<jid>", methods=["DELETE"])
 @login_required
 def signatures_job_delete(jid):
-    job = karzar_sign.get_job(jid)
+    job = _visible_job(jid)
     if not job:
         return jsonify({"ok": False, "error": "کار پیدا نشد."}), 404
     if job["status"] == karzar_sign.J_RUNNING:
@@ -601,8 +616,8 @@ def signatures_job_delete(jid):
 @app.route("/signatures/jobs", methods=["DELETE"])
 @login_required
 def signatures_jobs_delete_all():
-    before = karzar_sign.list_jobs(limit=10_000)
-    deleted = karzar_sign.delete_all_jobs()
+    before = [j for j in karzar_sign.list_jobs(limit=10_000) if _job_visible(j)]
+    deleted = sum(1 for j in before if karzar_sign.delete_job(j["id"]))
     skipped = len(before) - deleted
     log_event("signatures.jobs_delete_all", f"حذف همهٔ کارهای اخیر ثبت امضا ({deleted} کار)", level="warning", category="signatures",
               details={"deleted": deleted, "skipped_running": skipped})
@@ -612,7 +627,7 @@ def signatures_jobs_delete_all():
 @app.route("/signatures/status/<jid>")
 @login_required
 def signatures_status(jid):
-    job = karzar_sign.get_job(jid)
+    job = _visible_job(jid)
     if not job:
         return jsonify({"ok": False, "error": "کار پیدا نشد."}), 404
     return jsonify({"ok": True, "job": job})
@@ -621,7 +636,7 @@ def signatures_status(jid):
 @app.route("/signatures/screenshot/<jid>/<int:account_id>")
 @login_required
 def signatures_screenshot(jid, account_id):
-    if not karzar_sign.get_job(jid):
+    if not _visible_job(jid):
         abort(404)
     path = karzar_sign.screenshot_path(jid, account_id)
     if not os.path.isfile(path):
@@ -654,7 +669,7 @@ def _activity_filters_from_request():
 
 
 @app.route("/activity")
-@login_required
+@admin_required
 def activity_logs():
     users = sorted(get_users_data()["users"], key=lambda u: u["id"])
     if session.get("role") != "admin":
@@ -669,7 +684,7 @@ def activity_logs():
 
 
 @app.route("/activity/events")
-@login_required
+@admin_required
 def activity_events():
     events = activity_log.filter_events(**_activity_filters_from_request())
     page = activity_log.paginate(events, request.args.get("page", 1), request.args.get("per_page", 50))
@@ -678,7 +693,7 @@ def activity_events():
 
 
 @app.route("/activity/stats")
-@login_required
+@admin_required
 def activity_stats():
     events = activity_log.filter_events(**_activity_filters_from_request())
     return jsonify({"ok": True, "stats": activity_log.stats(events, request.args.get("granularity")),
@@ -686,7 +701,7 @@ def activity_stats():
 
 
 @app.route("/activity/export.<fmt>")
-@login_required
+@admin_required
 def activity_export(fmt):
     if fmt not in ("csv", "json"):
         abort(404)
