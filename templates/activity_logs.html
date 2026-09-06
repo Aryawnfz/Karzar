@@ -15,14 +15,17 @@
             <span id="act-live-dot" class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
             <p class="text-sm text-slate-500 dark:text-slate-400">
                 <span id="act-total" class="font-bold text-slate-800 dark:text-white">0</span> رویداد مطابق فیلتر
-                <span id="act-range" class="text-slate-400 dark:text-slate-500"></span>
+                <span id="act-range" class="fa-nums text-slate-400 dark:text-slate-500"></span>
             </p>
             <span id="act-loading" class="hidden h-4 w-4 animate-spin rounded-full border-2 border-primary-500 border-t-transparent"></span>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-            <label class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                <input type="checkbox" id="act-live" class="accent-primary-500" checked>
-                به‌روزرسانی زنده
+            <label class="fancy-checkbox inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                <input type="checkbox" id="act-live" class="fc-input peer sr-only" checked>
+                <span class="fc-box">
+                    <svg class="fc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>
+                </span>
+                <span class="fc-label">به‌روزرسانی زنده</span>
             </label>
             <button type="button" id="act-refresh" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10">
                 <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
@@ -31,6 +34,10 @@
             <a id="act-export-csv" href="{{ url_for('activity_export', fmt='csv') }}" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10">
                 <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
                 خروجی CSV
+            </a>
+            <a id="act-export-xlsx" href="{{ url_for('activity_export', fmt='xlsx') }}" class="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50/60 dark:bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100/70 dark:hover:bg-emerald-500/20">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M8 3v18M3 9h18M3 15h18"/></svg>
+                خروجی اکسل
             </a>
             <a id="act-export-json" href="{{ url_for('activity_export', fmt='json') }}" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10">
                 <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1"/><path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"/></svg>
@@ -116,16 +123,27 @@
                 <div class="grid grid-cols-2 gap-2">
                     <div>
                         <label class="mb-1 block text-[11px] font-bold text-slate-500 dark:text-slate-400">از</label>
-                        <input type="datetime-local" id="act-from" dir="ltr" class="input-field w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2 text-xs text-slate-700 dark:text-slate-100 outline-none focus:border-primary-400">
+                        <div class="input-glow fancy-date jalali-date-field relative rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5">
+                            <svg class="fd-icon pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+                            <input type="hidden" id="act-from">
+                            <input type="text" id="act-from-display" dir="ltr" autocomplete="off" readonly placeholder="انتخاب نشده" class="jdp-display-input fancy-date-input w-full rounded-xl bg-transparent py-2 pl-2 pr-8 text-right text-xs text-slate-700 dark:text-slate-100 outline-none">
+                        </div>
                     </div>
                     <div>
                         <label class="mb-1 block text-[11px] font-bold text-slate-500 dark:text-slate-400">تا</label>
-                        <input type="datetime-local" id="act-to" dir="ltr" class="input-field w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2 text-xs text-slate-700 dark:text-slate-100 outline-none focus:border-primary-400">
+                        <div class="input-glow fancy-date jalali-date-field relative rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5">
+                            <svg class="fd-icon pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+                            <input type="hidden" id="act-to">
+                            <input type="text" id="act-to-display" dir="ltr" autocomplete="off" readonly placeholder="انتخاب نشده" class="jdp-display-input fancy-date-input w-full rounded-xl bg-transparent py-2 pl-2 pr-8 text-right text-xs text-slate-700 dark:text-slate-100 outline-none">
+                        </div>
                     </div>
                 </div>
-                <label class="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                    <input type="checkbox" id="act-debug" class="accent-primary-500">
-                    نمایش رویدادهای «جزئیات» (درخواست‌های GET/poll و فایل‌های استاتیک)
+                <label class="fancy-checkbox inline-flex cursor-pointer items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <input type="checkbox" id="act-debug" class="fc-input peer sr-only">
+                    <span class="fc-box shrink-0" style="width:1.15rem;height:1.15rem;">
+                        <svg class="fc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="width:0.7rem;height:0.7rem;"><path d="M4 12l5 5L20 6"/></svg>
+                    </span>
+                    <span class="fc-label">نمایش رویدادهای «جزئیات» (درخواست‌های GET/poll و فایل‌های استاتیک)</span>
                 </label>
             </div>
         </div>

@@ -21,7 +21,9 @@
 import csv
 import io
 import json
+import logging
 import os
+import re
 import threading
 import time
 import uuid
@@ -33,6 +35,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 LOG_DIR = os.path.join(DATA_DIR, "activity_log")
 
 _write_lock = threading.Lock()
+_logger = logging.getLogger(__name__)
 
 LEVELS = ("debug", "info", "warning", "error", "security")
 LEVEL_RANK = {lv: i for i, lv in enumerate(LEVELS)}
@@ -158,11 +161,15 @@ def log_event(
     if actor:
         event.update({k: actor.get(k) for k in ("user_id", "username", "full_name", "role") if actor.get(k) is not None})
 
-    _ensure_dir()
     line = (json.dumps(event, ensure_ascii=False) + "\n").encode("utf-8")
-    with _write_lock:
-        with open(_file_for(now), "ab") as f:
-            f.write(line)
+    try:
+        _ensure_dir()
+        with _write_lock:
+            with open(_file_for(now), "ab") as f:
+                f.write(line)
+    except OSError:
+        # لاگ‌نویسی هرگز نباید درخواست کاربر را با خطای ۵۰۰ متوقف کند
+        _logger.exception("activity log write failed (%s)", LOG_DIR)
     return event
 
 
@@ -376,12 +383,137 @@ def stats(events: list, granularity: Optional[str] = None) -> dict:
 
 
 # --------------------------------------------------------------------------
+# تبدیل تقویم میلادی به شمسی (جلالی) — الگوریتم نجومی استاندارد ۳۳ ساله،
+# دقیقاً همان الگوریتمی که در static/js/jalali-picker.js برای انتخابگر
+# تاریخ استفاده شده، تا تاریخ شمسیِ نمایش‌داده‌شده در رابط کاربری و خروجی‌ها
+# همیشه یکسان باشند.
+# --------------------------------------------------------------------------
+_JALALI_BREAKS = (-61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210,
+                   1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178)
+
+
+def _int_div(a, b):
+    return int(a / b)
+
+
+def _imod(a, b):
+    return a - _int_div(a, b) * b
+
+
+def _jalali_cal_info(jy):
+    breaks = _JALALI_BREAKS
+    if jy < breaks[0] or jy >= breaks[-1]:
+        raise ValueError(f"سال جلالی خارج از محدوده پشتیبانی‌شده است: {jy}")
+    gy = jy + 621
+    leap_j = -14
+    prev_break = breaks[0]
+    jump = 0
+    cur_break = prev_break
+    for i in range(1, len(breaks)):
+        cur_break = breaks[i]
+        jump = cur_break - prev_break
+        if jy < cur_break:
+            break
+        leap_j += _int_div(jump, 33) * 8 + _int_div(_imod(jump, 33), 4)
+        prev_break = cur_break
+    n = jy - prev_break
+    leap_j += _int_div(n, 33) * 8 + _int_div(_imod(n, 33) + 3, 4)
+    if _imod(jump, 33) == 4 and jump - n == 4:
+        leap_j += 1
+    leap_g = _int_div(gy, 4) - _int_div((_int_div(gy, 100) + 1) * 3, 4) - 150
+    march = 20 + leap_j - leap_g
+    if jump - n < 6:
+        n = n - jump + _int_div(jump + 4, 33) * 33
+    leap = _imod(_imod(n + 1, 33) - 1, 4)
+    if leap == -1:
+        leap = 4
+    return {"leap": leap, "gy": gy, "march": march}
+
+
+def _gregorian_to_jdn(gy, gm, gd):
+    d = _int_div((gy + _int_div(gm - 8, 6) + 100100) * 1461, 4) \
+        + _int_div(153 * _imod(gm + 9, 12) + 2, 5) + gd - 34840408
+    d = d - _int_div(_int_div(gy + 100100 + _int_div(gm - 8, 6), 100) * 3, 4) + 752
+    return d
+
+
+def _jdn_to_gregorian(jdn):
+    j = 4 * jdn + 139361631
+    j += _int_div(_int_div(4 * jdn + 183187720, 146097) * 3, 4) * 4 - 3908
+    i = _int_div(_imod(j, 1461), 4) * 5 + 308
+    gd = _int_div(_imod(i, 153), 5) + 1
+    gm = _imod(_int_div(i, 153), 12) + 1
+    gy = _int_div(j, 1461) - 100100 + _int_div(8 - gm, 6)
+    return gy, gm, gd
+
+
+def gregorian_to_jalali(gy, gm, gd):
+    """(سال، ماه، روز) میلادی → (سال، ماه، روز) شمسی."""
+    jdn = _gregorian_to_jdn(gy, gm, gd)
+    approx_gy = _jdn_to_gregorian(jdn)[0]
+    jy = approx_gy - 621
+    info = _jalali_cal_info(jy)
+    jdn1f = _gregorian_to_jdn(info["gy"], 3, info["march"])
+    k = jdn - jdn1f
+    if k >= 0:
+        if k <= 185:
+            return jy, 1 + _int_div(k, 31), _imod(k, 31) + 1
+        k -= 186
+    else:
+        jy -= 1
+        k += 179
+        if info["leap"] == 1:
+            k += 1
+    return jy, 7 + _int_div(k, 30), _imod(k, 30) + 1
+
+
+_TS_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})")
+
+
+def jalali_ts_str(ts: Optional[str]) -> str:
+    """برچسب زمانی میلادی ذخیره‌شده (ISO) → رشتهٔ تاریخ/ساعت شمسی، برای خروجی‌ها."""
+    if not ts:
+        return ""
+    m = _TS_RE.match(ts)
+    if not m:
+        return ""
+    gy, gm, gd, hh, mi, ss = (int(x) for x in m.groups())
+    try:
+        jy, jm, jd = gregorian_to_jalali(gy, gm, gd)
+    except ValueError:
+        return ""
+    return f"{jy:04d}/{jm:02d}/{jd:02d} {hh:02d}:{mi:02d}:{ss:02d}"
+
+
+# --------------------------------------------------------------------------
 # خروجی و پاک‌سازی
 # --------------------------------------------------------------------------
 CSV_COLUMNS = (
-    "ts", "level", "category", "action", "message", "user_id", "username", "full_name", "role",
+    "ts", "jalali_ts", "level", "category", "action", "message", "user_id", "username", "full_name", "role",
     "ip", "method", "path", "endpoint", "status_code", "duration_ms", "request_id", "details",
 )
+
+# ستون → عنوان فارسی، برای خروجی اکسل (و هر جای دیگری که خواستیم عنوان خوانا نشان دهیم)
+COLUMN_LABELS_FA = {
+    "ts": "تاریخ و ساعت (میلادی)", "jalali_ts": "تاریخ و ساعت (شمسی)",
+    "level": "سطح", "category": "دسته", "action": "عمل", "message": "شرح",
+    "user_id": "شناسهٔ کاربر", "username": "نام کاربری", "full_name": "نام کامل", "role": "نقش",
+    "ip": "IP", "method": "متد", "path": "مسیر", "endpoint": "Endpoint",
+    "status_code": "کد وضعیت", "duration_ms": "زمان پاسخ (ms)", "request_id": "شناسهٔ درخواست",
+    "details": "جزئیات",
+}
+
+LEVEL_LABELS_FA = {"debug": "دیباگ", "info": "اطلاعات", "warning": "هشدار", "error": "خطا", "security": "امنیتی"}
+LEVEL_COLORS_HEX = {"debug": "94A3B8", "info": "0EA5E9", "warning": "F59E0B", "error": "EF4444", "security": "D946EF"}
+
+
+def _export_value(ev: dict, column: str):
+    if column == "jalali_ts":
+        return jalali_ts_str(ev.get("ts"))
+    v = ev.get(column)
+    if column == "details":
+        return json.dumps(v or {}, ensure_ascii=False)
+    return v
 
 
 def to_csv(events: list) -> str:
@@ -390,13 +522,60 @@ def to_csv(events: list) -> str:
     w = csv.writer(buf)
     w.writerow(CSV_COLUMNS)
     for ev in events:
-        row = []
-        for c in CSV_COLUMNS:
-            v = ev.get(c)
-            if c == "details":
-                v = json.dumps(v or {}, ensure_ascii=False)
-            row.append("" if v is None else v)
-        w.writerow(row)
+        row = [_export_value(ev, c) for c in CSV_COLUMNS]
+        w.writerow(["" if v is None else v for v in row])
+    return buf.getvalue()
+
+
+def to_json_export(events: list) -> str:
+    """مثل رکوردهای خام لاگ، به‌علاوهٔ فیلد jalali_ts برای هر رویداد."""
+    enriched = [dict(ev, jalali_ts=jalali_ts_str(ev.get("ts"))) for ev in events]
+    return json.dumps(enriched, ensure_ascii=False, indent=2)
+
+
+def to_xlsx(events: list) -> bytes:
+    """خروجی اکسل (.xlsx) واقعی با هدر فارسی، راست‌به‌چپ، و رنگ‌بندی برحسب سطح."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "گزارش فعالیت‌ها"
+    ws.sheet_view.rightToLeft = True
+
+    headers = [COLUMN_LABELS_FA.get(c, c) for c in CSV_COLUMNS]
+    ws.append(headers)
+    header_fill = PatternFill("solid", fgColor="14A893")
+    header_font = Font(color="FFFFFF", bold=True, name="Calibri")
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
+
+    for ev in events:
+        row = [_export_value(ev, c) for c in CSV_COLUMNS]
+        ws.append(["" if v is None else v for v in row])
+
+    level_col = CSV_COLUMNS.index("level") + 1
+    for r in range(2, ws.max_row + 1):
+        cell = ws.cell(row=r, column=level_col)
+        color = LEVEL_COLORS_HEX.get(str(cell.value))
+        if color:
+            cell.fill = PatternFill("solid", fgColor=color)
+            cell.font = Font(color="FFFFFF", bold=True)
+        cell.value = LEVEL_LABELS_FA.get(str(cell.value), cell.value)
+
+    widths = {"ts": 20, "jalali_ts": 20, "level": 10, "category": 12, "action": 22, "message": 46,
+              "user_id": 10, "username": 16, "full_name": 18, "role": 10, "ip": 15, "method": 8,
+              "path": 30, "endpoint": 20, "status_code": 10, "duration_ms": 12, "request_id": 24, "details": 40}
+    for idx, c in enumerate(CSV_COLUMNS, start=1):
+        ws.column_dimensions[get_column_letter(idx)].width = widths.get(c, 16)
+
+    buf = io.BytesIO()
+    wb.save(buf)
     return buf.getvalue()
 
 

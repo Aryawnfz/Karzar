@@ -32,6 +32,47 @@ function updateThemeToggleUI() {
     });
 }
 
+// ============================================================
+// اعلان شناور (Toast) سفارشی هماهنگ با تم سایت — به‌جای alert() پیش‌فرض مرورگر
+// در کل سایت با window.showToast(message, type) قابل استفاده است.
+// type: 'success' | 'error'
+// ============================================================
+const TOAST_ICONS = {
+    success: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+    error: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>',
+};
+
+function escToastText(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function showToast(message, type = 'success') {
+    if (typeof Swal === 'undefined') {
+        window.alert(message);
+        return;
+    }
+    Swal.mixin({
+        toast: true,
+        position: 'top',
+        showConfirmButton: false,
+        timer: 3800,
+        timerProgressBar: true,
+        buttonsStyling: false,
+        customClass: { popup: `swal-toast swal-toast-${type}` },
+        showClass: { popup: 'swal-toast-in' },
+        hideClass: { popup: 'swal-toast-out' },
+        didOpen: (toast) => {
+            toast.onmouseenter = Swal.stopTimer;
+            toast.onmouseleave = Swal.resumeTimer;
+        },
+    }).fire({
+        html: `
+            <div class="swal-toast-icon swal-toast-icon-${type}">${TOAST_ICONS[type] || TOAST_ICONS.success}</div>
+            <p class="swal-toast-text">${escToastText(message)}</p>
+        `,
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     updateThemeToggleUI();
 

@@ -48,6 +48,34 @@ document.addEventListener('DOMContentLoaded', () => {
         formError.classList.add('hidden');
     }
 
+    // تاییدیهٔ حذف با ظاهر سفارشی (SweetAlert2) به‌جای confirm() پیش‌فرض مرورگر
+    function confirmDelete(title, text) {
+        if (typeof Swal === 'undefined') return Promise.resolve(window.confirm(text || title));
+        return Swal.fire({
+            html: `
+                <div class="swal-icon-warn">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </div>
+                <h2 class="swal-glass-title">${esc(title)}</h2>
+                <p class="swal-glass-text">${esc(text)}</p>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'بله، حذف شود',
+            cancelButtonText: 'انصراف',
+            reverseButtons: true,
+            focusCancel: true,
+            buttonsStyling: false,
+            customClass: {
+                container: 'swal-backdrop',
+                popup: 'swal-glass',
+                confirmButton: 'swal-btn-danger',
+                cancelButton: 'swal-btn-cancel',
+            },
+            showClass: { popup: 'swal-anim-in' },
+            hideClass: { popup: 'swal-anim-out' },
+        }).then((r) => r.isConfirmed);
+    }
+
     function setRunning(on) {
         running = on;
         submitBtn.disabled = on || document.querySelectorAll('.account-checkbox:checked').length === 0;
@@ -297,7 +325,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const del = e.target.closest('[data-delete-job]');
             if (del) {
                 if (del.disabled) return;
-                if (!confirm('این کار و اسکرین‌شات‌های آن حذف شود؟')) return;
+                const ok = await confirmDelete('حذف این کار؟', 'این کار و اسکرین‌شات‌های آن برای همیشه حذف می‌شود.');
+                if (!ok) return;
                 del.disabled = true;
                 await deleteJob(del.dataset.deleteJob);
                 return;
@@ -312,7 +341,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (historyClearBtn) {
         historyClearBtn.addEventListener('click', async () => {
             if (historyClearBtn.disabled) return;
-            if (!confirm('همهٔ کارهای اخیر (به‌جز کارهای در حال اجرا) با اسکرین‌شات‌هایشان حذف شوند؟')) return;
+            const ok = await confirmDelete('حذف همهٔ کارهای اخیر؟', 'همهٔ کارهای اخیر (به‌جز کارهای در حال اجرا) به‌همراه اسکرین‌شات‌هایشان برای همیشه حذف می‌شوند.');
+            if (!ok) return;
             historyClearBtn.disabled = true;
             await deleteAllJobs();
         });

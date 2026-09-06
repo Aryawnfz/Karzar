@@ -703,7 +703,7 @@ def activity_stats():
 @app.route("/activity/export.<fmt>")
 @admin_required
 def activity_export(fmt):
-    if fmt not in ("csv", "json"):
+    if fmt not in ("csv", "json", "xlsx"):
         abort(404)
     events = activity_log.filter_events(**_activity_filters_from_request())
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -712,8 +712,11 @@ def activity_export(fmt):
     if fmt == "csv":
         body = activity_log.to_csv(events)
         mimetype = "text/csv; charset=utf-8"
+    elif fmt == "xlsx":
+        body = activity_log.to_xlsx(events)
+        mimetype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     else:
-        body = json.dumps(events, ensure_ascii=False, indent=2)
+        body = activity_log.to_json_export(events)
         mimetype = "application/json; charset=utf-8"
     return Response(body, mimetype=mimetype,
                     headers={"Content-Disposition": f"attachment; filename=activity-{stamp}.{fmt}"})

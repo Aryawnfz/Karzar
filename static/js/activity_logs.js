@@ -20,8 +20,16 @@ document.addEventListener('DOMContentLoaded', () => {
         first: $('act-first'), prev: $('act-prev'), next: $('act-next'), last: $('act-last'),
         total: $('act-total'), range: $('act-range'), loading: $('act-loading'), liveDot: $('act-live-dot'),
         live: $('act-live'), refresh: $('act-refresh'), reset: $('act-reset'), clear: $('act-clear'),
-        exportCsv: $('act-export-csv'), exportJson: $('act-export-json'), granularity: $('act-granularity'),
+        exportCsv: $('act-export-csv'), exportXlsx: $('act-export-xlsx'), exportJson: $('act-export-json'), granularity: $('act-granularity'),
     };
+
+    // ---------------- انتخابگر تاریخ/ساعت شمسی سفارشی ----------------
+    const jdpFrom = window.JalaliDateTimePicker
+        ? new JalaliDateTimePicker(el.from, $('act-from-display'), { enableTime: true })
+        : null;
+    const jdpTo = window.JalaliDateTimePicker
+        ? new JalaliDateTimePicker(el.to, $('act-to-display'), { enableTime: true })
+        : null;
 
     const LEVEL_STYLE = {
         debug:    { badge: 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400', color: '#94a3b8' },
@@ -80,6 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
         history.replaceState(null, '', `${location.pathname}?${p.toString()}`);
         const exp = buildParams(false).toString();
         el.exportCsv.href = `/activity/export.csv?${exp}`;
+        el.exportXlsx.href = `/activity/export.xlsx?${exp}`;
         el.exportJson.href = `/activity/export.json?${exp}`;
     }
 
@@ -103,9 +112,12 @@ document.addEventListener('DOMContentLoaded', () => {
         list.filter((u) => !term || `${u.full_name} ${u.username}`.toLowerCase().includes(term)).forEach((u) => {
             const id = String(u.id);
             const row = document.createElement('label');
-            row.className = 'flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-white/5';
+            row.className = 'fancy-checkbox flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-white/5';
             row.innerHTML = `
-                <input type="checkbox" value="${id}" class="accent-primary-500" ${state.users.has(id) ? 'checked' : ''}>
+                <input type="checkbox" value="${id}" class="fc-input peer sr-only" ${state.users.has(id) ? 'checked' : ''}>
+                <span class="fc-box" style="width:1.15rem;height:1.15rem;">
+                    <svg class="fc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="width:0.7rem;height:0.7rem;"><path d="M4 12l5 5L20 6"/></svg>
+                </span>
                 <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-secondary-400 to-secondary-600 text-[10px] font-bold text-white">${(u.full_name || '؟')[0]}</span>
                 <span class="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">${esc(u.full_name)}</span>
                 ${u.username ? `<span dir="ltr" class="font-mono text-[10px] text-slate-400">${esc(u.username)}</span>` : ''}
@@ -137,8 +149,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function syncInputs() {
         el.q.value = state.q;
-        el.from.value = state.from;
-        el.to.value = state.to;
+        if (jdpFrom) jdpFrom.setValue(state.from); else el.from.value = state.from;
+        if (jdpTo) jdpTo.setValue(state.to); else el.to.value = state.to;
         el.debug.checked = state.debug;
         el.perPage.value = String(state.perPage);
     }
@@ -236,6 +248,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (v == null) return '—';
         return v >= 1000 ? `${(v / 1000).toFixed(2)} s` : `${Math.round(v)} ms`;
     }
+    // تبدیل هر برچسب زمانی میلادی (خروجی سرور) به رشتهٔ شمسی برای نمایش کنار تاریخ میلادی
+    function jalaliOf(isoLike, withSeconds) {
+        if (!isoLike || !window.jalaliDateUtil) return '';
+        const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/.exec(isoLike);
+        if (!m) return '';
+        const j = window.jalaliDateUtil.toJalali(+m[1], +m[2], +m[3]);
+        const pad2 = (n) => (n < 10 ? '0' : '') + n;
+        let str = `${j.jy}/${pad2(j.jm)}/${pad2(j.jd)} ${m[4]}:${m[5]}`;
+        if (withSeconds && m[6] !== undefined) str += ':' + m[6];
+        return window.jalaliDateUtil.toFaDigits(str);
+    }
     function renderKpis(stats) {
         $('kpi-total').textContent = stats.total.toLocaleString('fa-IR');
         ['info', 'warning', 'error', 'security'].forEach((k) => ($(`kpi-${k}`).textContent = (stats.by_level[k] || 0).toLocaleString('fa-IR')));
@@ -243,12 +266,48 @@ document.addEventListener('DOMContentLoaded', () => {
         $('kpi-avg').textContent = fmtMs(stats.avg_duration_ms);
         $('kpi-p95').textContent = fmtMs(stats.p95_duration_ms);
         el.total.textContent = stats.total.toLocaleString('fa-IR');
-        el.range.textContent = stats.first_ts ? `(${stats.first_ts.replace('T', ' ').slice(0, 16)} تا ${stats.last_ts.replace('T', ' ').slice(0, 16)})` : '';
+        if (stats.first_ts) {
+            const gFrom = stats.first_ts.replace('T', ' ').slice(0, 16);
+            const gTo = stats.last_ts.replace('T', ' ').slice(0, 16);
+            const jFrom = jalaliOf(stats.first_ts, false);
+            const jTo = jalaliOf(stats.last_ts, false);
+            el.range.textContent = `(${jFrom || gFrom} تا ${jTo || gTo}${jFrom ? ` / ${gFrom} تا ${gTo}` : ''})`;
+        } else {
+            el.range.textContent = '';
+        }
     }
 
     // ---------------- جدول ----------------
     function esc(s) {
         return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    // تاییدیهٔ حذف با ظاهر سفارشی (SweetAlert2) به‌جای confirm() پیش‌فرض مرورگر
+    function confirmDelete(title, text) {
+        if (typeof Swal === 'undefined') return Promise.resolve(window.confirm(text || title));
+        return Swal.fire({
+            html: `
+                <div class="swal-icon-warn">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </div>
+                <h2 class="swal-glass-title">${esc(title)}</h2>
+                <p class="swal-glass-text">${esc(text)}</p>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'بله، حذف شود',
+            cancelButtonText: 'انصراف',
+            reverseButtons: true,
+            focusCancel: true,
+            buttonsStyling: false,
+            customClass: {
+                container: 'swal-backdrop',
+                popup: 'swal-glass',
+                confirmButton: 'swal-btn-danger',
+                cancelButton: 'swal-btn-cancel',
+            },
+            showClass: { popup: 'swal-anim-in' },
+            hideClass: { popup: 'swal-anim-out' },
+        }).then((r) => r.isConfirmed);
     }
     function statusBadge(code) {
         if (!code) return '<span class="text-slate-300 dark:text-slate-600">—</span>';
@@ -266,8 +325,12 @@ document.addEventListener('DOMContentLoaded', () => {
             tr.className = 'cursor-pointer align-top hover:bg-slate-50/70 dark:hover:bg-white/[0.03] transition-colors';
             const ls = LEVEL_STYLE[ev.level] || LEVEL_STYLE.info;
             const t = (ev.ts || '').replace('T', ' ');
+            const tj = jalaliOf(ev.ts, true);
             tr.innerHTML = `
-                <td class="whitespace-nowrap px-4 py-2.5 font-mono text-[11px] text-slate-500 dark:text-slate-400" dir="ltr">${esc(t.slice(0, 19))}<span class="text-slate-300 dark:text-slate-600">${esc(t.slice(19))}</span></td>
+                <td class="whitespace-nowrap px-4 py-2.5 text-right text-[11px] text-slate-700 dark:text-slate-200">
+                    ${tj ? `<div dir="ltr" class="fa-nums font-semibold">${esc(tj)}</div>` : ''}
+                    <div dir="ltr" class="mt-0.5 font-mono text-[10px] text-slate-400 dark:text-slate-500">${esc(t.slice(0, 19))}<span class="text-slate-300 dark:text-slate-600">${esc(t.slice(19))}</span></div>
+                </td>
                 <td class="px-3 py-2.5"><span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${ls.badge}">${esc(LEVEL_LABEL[ev.level] || ev.level)}</span></td>
                 <td class="whitespace-nowrap px-3 py-2.5 text-slate-500 dark:text-slate-400">${esc(CAT_LABEL[ev.category] || ev.category)}</td>
                 <td class="whitespace-nowrap px-3 py-2.5">
@@ -275,11 +338,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         ? `<span class="font-semibold text-slate-700 dark:text-slate-200">${esc(ev.full_name || ev.username)}</span> <span dir="ltr" class="font-mono text-[10px] text-slate-400">${esc(ev.username || '')}</span>`
                         : '<span class="text-slate-400">ناشناس</span>'}
                 </td>
-                <td class="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] text-primary-600 dark:text-primary-400" dir="ltr">${esc(ev.action)}</td>
-                <td class="max-w-md px-3 py-2.5 text-slate-700 dark:text-slate-200"><div class="truncate" title="${esc(ev.message)}">${esc(ev.message)}</div>${ev.path ? `<div dir="ltr" class="truncate font-mono text-[10px] text-slate-400">${esc(ev.method || '')} ${esc(ev.path)}</div>` : ''}</td>
-                <td class="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] text-slate-500 dark:text-slate-400" dir="ltr">${esc(ev.ip || '—')}</td>
+                <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-[11px] text-primary-600 dark:text-primary-400" dir="ltr">${esc(ev.action)}</td>
+                <td class="max-w-md px-3 py-2.5 text-slate-700 dark:text-slate-200"><div class="truncate" title="${esc(ev.message)}">${esc(ev.message)}</div>${ev.path ? `<div dir="ltr" class="truncate text-right font-mono text-[10px] text-slate-400">${esc(ev.method || '')} ${esc(ev.path)}</div>` : ''}</td>
+                <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-[11px] text-slate-500 dark:text-slate-400" dir="ltr">${esc(ev.ip || '—')}</td>
                 <td class="whitespace-nowrap px-3 py-2.5">${statusBadge(ev.status_code)}</td>
-                <td class="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] text-slate-500 dark:text-slate-400" dir="ltr">${ev.duration_ms != null ? fmtMs(ev.duration_ms) : '—'}</td>
+                <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-[11px] text-slate-500 dark:text-slate-400" dir="ltr">${ev.duration_ms != null ? fmtMs(ev.duration_ms) : '—'}</td>
                 <td class="px-3 py-2.5 text-slate-300 dark:text-slate-600"><svg class="h-4 w-4 transition-transform ${expandedId === ev.id ? 'rotate-180' : ''}" data-chev viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></td>`;
             tr.addEventListener('click', () => toggleDetails(ev, tr));
             el.rows.appendChild(tr);
@@ -408,14 +471,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (el.clear) {
         el.clear.addEventListener('click', async () => {
-            if (!confirm('همهٔ لاگ‌های فعالیت به‌طور دائمی حذف شوند؟ این عمل بازگشت‌ناپذیر است.')) return;
+            const ok = await confirmDelete('پاک‌سازی کل لاگ‌ها؟', 'همهٔ لاگ‌های فعالیت به‌طور دائمی حذف می‌شوند. این عمل بازگشت‌ناپذیر است.');
+            if (!ok) return;
             el.clear.disabled = true;
             try {
                 const res = await fetch('/activity/clear', { method: 'POST' });
                 const d = await res.json();
-                if (!d.ok) alert(d.error || 'پاک‌سازی انجام نشد.');
+                if (!d.ok) showToast(d.error || 'پاک‌سازی انجام نشد.', 'error');
+                else showToast('همهٔ لاگ‌ها با موفقیت پاک‌سازی شد.', 'success');
             } catch (e) {
-                alert('ارتباط با سرور برقرار نشد.');
+                showToast('ارتباط با سرور برقرار نشد.', 'error');
             } finally {
                 el.clear.disabled = false;
                 load(false);

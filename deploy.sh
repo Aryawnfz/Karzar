@@ -84,8 +84,9 @@ fi
 grep -q '^PLAYWRIGHT_BROWSERS_PATH=' "$ENV_FILE" || echo "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH" >> "$ENV_FILE"
 
 # ---------------------------------------------------------------- 5) مجوزها
-mkdir -p "$APP_DIR/data"
+mkdir -p "$APP_DIR"/data/{activity_log,sign_jobs,screenshots,profiles,login_sessions}
 chown -R "$RUN_USER:$RUN_USER" "$APP_DIR"
+chmod -R u+rwX "$APP_DIR/data"
 chmod 600 "$ENV_FILE"
 chmod +x "$0" || true
 
