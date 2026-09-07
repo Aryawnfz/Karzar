@@ -11,6 +11,10 @@ Gunicorn آن را متوقف نمی‌کند:
   data/screenshots/<jid>/<acc_id>.png  ← اسکرین‌شات پیغام موفقیت هر اکانت
 
 اکانت‌ها نوبت به نوبت (یکی پس از دیگری) امضا می‌کنند.
+
+اگر کارزار در فرم امضا ورودی اضافه بخواهد (مثل «شهر» یا «سن»)، با اکانت اول کار
+به حالت «waiting_input» می‌رود و فهرست فیلدها را در job می‌نویسد؛ سامانه آن‌ها را
+در یک مودال از کاربر می‌گیرد و پس از ثبت، همان مقادیر برای همهٔ اکانت‌ها جایگذاری می‌شود.
 """
 
 import asyncio
@@ -47,6 +51,13 @@ SEL_SUCCESS = "#bottom-sheet-signup .signup-wizard-end__title"
 SEL_WIZARD_ERROR = "#bottom-sheet-signup .signup-wizard-item.active .signup-wizard-item__error"
 SEL_OTP_INPUT = "#bottom-sheet-signup #otp-code-input"
 SEL_CAPTCHA = "#bottom-sheet-signup #captcha"
+SEL_ACTIVE_ITEM = "#bottom-sheet-signup .signup-wizard-item.active"
+SEL_ALL_ITEMS = "#bottom-sheet-signup .signup-wizard-item"
+
+# فیلدهایی که جزو «ورودی‌های کارزار» نیستند (احراز هویت/کد امنیتی)
+AUTH_FIELD_IDS = ("fullname", "yourmail", "captcha", "otp-code-input", "code", "a11y")
+MAX_WIZARD_STEPS = 5
+INPUT_WAIT_TIMEOUT = 15 * 60  # حداکثر انتظار برای ورود اطلاعات توسط کاربر (ثانیه)
 
 SUCCESS_TEXT = "با موفقیت"
 
@@ -58,7 +69,9 @@ A_FAILED = "failed"
 
 # وضعیت کل کار
 J_RUNNING = "running"
+J_WAITING = "waiting_input"  # منتظر ورودی‌های کارزار از کاربر
 J_FINISHED = "finished"
+ACTIVE_STATUSES = (J_RUNNING, J_WAITING)
 
 _file_lock = threading.Lock()
 
@@ -151,7 +164,7 @@ def _pid_alive(pid) -> bool:
 
 def _reconcile(job: dict) -> dict:
     """اگر فرایندِ اجراکنندهٔ کار دیگر زنده نباشد ولی وضعیت «در حال اجرا» مانده باشد، کار را بسته اعلام می‌کند."""
-    if job.get("status") != J_RUNNING:
+    if job.get("status") not in ACTIVE_STATUSES:
         return job
     started = job.get("started_ts") or 0
     pid = job.get("pid")
@@ -194,7 +207,7 @@ def list_jobs(limit: int = 10) -> list:
 def delete_job(jid: str) -> bool:
     """حذف فایل وضعیت، لاگ و اسکرین‌شات‌های یک کار. کارِ در حال اجرا حذف نمی‌شود."""
     job = get_job(jid)
-    if not job or job.get("status") == J_RUNNING:
+    if not job or job.get("status") in ACTIVE_STATUSES:
         return False
     with _file_lock:
         for path in (_job_path(jid), os.path.join(JOBS_DIR, f"{jid}.log")):
@@ -212,6 +225,226 @@ def _update_account(job: dict, acc_id, **fields) -> None:
             a.update(fields)
             break
     _save_job(job)
+
+
+# --------------------------------------------------------------------------
+# ورودی‌های اضافهٔ کارزار (شهر، سن، ...)
+# --------------------------------------------------------------------------
+def submit_inputs(jid: str, values: dict):
+    """
+    ثبت مقادیر واردشدهٔ کاربر برای فیلدهای کارزار. فقط وقتی کار در حالت
+    waiting_input است پذیرفته می‌شود. خروجی: (ok, error_message).
+    """
+    job = _read_job(jid)
+    if not job:
+        return False, "کار پیدا نشد."
+    if job.get("status") != J_WAITING:
+        return False, "این کار منتظر ورودی نیست."
+    if not isinstance(values, dict):
+        return False, "فرمت ورودی‌ها معتبر نیست."
+
+    clean = {}
+    for f in job.get("input_fields") or []:
+        name = f["name"]
+        raw = values.get(name, "")
+        if isinstance(raw, bool):
+            raw = "1" if raw else ""
+        val = str(raw if raw is not None else "").strip()
+        if f.get("required") and not val:
+            return False, f"فیلد «{f.get('label') or name}» الزامی است."
+        maxlen = f.get("maxlength")
+        if maxlen and len(val) > int(maxlen):
+            return False, f"فیلد «{f.get('label') or name}» حداکثر {maxlen} کاراکتر است."
+        opts = f.get("options")
+        if opts and val and val not in {str(o["value"]) for o in opts}:
+            return False, f"مقدار انتخاب‌شده برای «{f.get('label') or name}» معتبر نیست."
+        clean[name] = val
+
+    job["inputs"] = clean
+    job["inputs_cancelled"] = False
+    job["status"] = J_RUNNING
+    _save_job(job)
+    return True, None
+
+
+def cancel_inputs(jid: str) -> bool:
+    """لغو ورود اطلاعات؛ اکانت‌های باقی‌مانده ناموفق می‌شوند."""
+    job = _read_job(jid)
+    if not job or job.get("status") != J_WAITING:
+        return False
+    job["inputs_cancelled"] = True
+    job["status"] = J_RUNNING
+    _save_job(job)
+    return True
+
+
+# فهرست فیلدهای قابل‌پرکردن در مرحلهٔ فعال ویزارد (به‌جز توکن/کپچا/کد تأیید/فایل)
+_COLLECT_FIELDS_JS = """
+([itemSel, skipIds]) => {
+    const item = document.querySelector(itemSel);
+    if (!item) return [];
+    const skip = new Set(skipIds);
+    const isVis = (el) => {
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        const s = getComputedStyle(el);
+        return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none';
+    };
+    const txt = (el) => (el ? (el.textContent || '').replace(/\\s+/g, ' ').trim() : '');
+    const groupLabel = (el) => {
+        const grp = el.closest('.form-group, .signup-wizard-item__group, fieldset, div');
+        const lab = grp && grp.querySelector('label.signup-wizard-item__label, legend, label');
+        return txt(lab);
+    };
+    const fields = [];
+    item.querySelectorAll('input, select, textarea').forEach((el) => {
+        const tag = el.tagName.toLowerCase();
+        const type = tag === 'input' ? (el.getAttribute('type') || 'text').toLowerCase() : tag;
+        if (['hidden', 'file', 'submit', 'button', 'image', 'reset'].includes(type)) return;
+        if (skip.has(el.id) || skip.has(el.name)) return;
+        const name = el.name || el.id;
+        if (!name) return;
+        const ownLabel = el.id ? item.querySelector('label[for="' + el.id + '"]') : null;
+
+        if (type === 'radio' || type === 'checkbox') {
+            if (!isVis(el) && !isVis(ownLabel)) return;
+            let f = fields.find((x) => x.name === name && x.type === type);
+            if (!f) {
+                f = { name, id: el.id || '', type, label: groupLabel(el) || name, required: el.required, options: [] };
+                fields.push(f);
+            }
+            f.options.push({ value: el.value, label: txt(ownLabel) || el.value });
+            return;
+        }
+        if (!isVis(el)) return;
+        const rules = el.getAttribute('data-rules') || '';
+        const f = {
+            name, id: el.id || '', type,
+            label: txt(ownLabel) || groupLabel(el) || el.placeholder || name,
+            placeholder: el.placeholder || '',
+            maxlength: el.maxLength > 0 ? el.maxLength : null,
+            required: el.required || /(^|\\|)required(\\||$)/.test(rules),
+            value: el.value || '',
+        };
+        if (tag === 'select') {
+            f.options = Array.from(el.options).map((o) => ({ value: o.value, label: txt(o) }));
+        }
+        fields.push(f);
+    });
+    return fields;
+}
+"""
+
+
+async def _collect_fields(page) -> list:
+    try:
+        fields = await page.evaluate(_COLLECT_FIELDS_JS, [SEL_ACTIVE_ITEM, list(AUTH_FIELD_IDS)])
+    except Exception:
+        return []
+    return [f for f in (fields or []) if isinstance(f, dict) and f.get("name")]
+
+
+async def _fill_fields(page, fields: list, inputs: dict) -> None:
+    for f in fields:
+        name, ftype = f["name"], f.get("type")
+        val = (inputs or {}).get(name)
+        if val is None or val == "":
+            continue
+        base = f'{SEL_ACTIVE_ITEM} [name="{name}"]'
+        try:
+            if ftype == "select":
+                await page.select_option(base, value=str(val))
+            elif ftype == "radio":
+                await page.check(f'{base}[value="{val}"]', force=True)
+            elif ftype == "checkbox":
+                opts = f.get("options") or []
+                if len(opts) <= 1:
+                    await page.set_checked(base, str(val) not in ("", "0", "false"), force=True)
+                else:
+                    for v in str(val).split(","):
+                        v = v.strip()
+                        if v:
+                            await page.check(f'{base}[value="{v}"]', force=True)
+            else:
+                await page.locator(base).first.fill(str(val))
+        except Exception as e:
+            raise RuntimeError(f"جایگذاری «{f.get('label') or name}» ناموفق بود: {e}")
+
+
+async def _active_step_index(page) -> int:
+    try:
+        return await page.evaluate(
+            "(sel) => Array.from(document.querySelectorAll(sel)).findIndex(e => e.classList.contains('active'))",
+            SEL_ALL_ITEMS,
+        )
+    except Exception:
+        return -1
+
+
+async def _wait_step_outcome(page, prev_idx: int, timeout: float = 60) -> str:
+    """
+    بعد از کلیک «مرحله‌ی بعد»: 'success' اگر پیغام موفقیت آمد، 'next' اگر مرحلهٔ
+    دیگری از ویزارد فعال شد؛ در صورت خطا/کد تأیید استثنا می‌دهد.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        txt = await _visible_text(page, SEL_SUCCESS)
+        if txt and SUCCESS_TEXT in txt:
+            return "success"
+        if await _is_visible(page, SEL_OTP_INPUT):
+            raise RuntimeError("کارزار کد تأیید پیامکی خواست؛ نشست این اکانت معتبر نیست. اکانت را دوباره وارد کنید.")
+        for el in await page.query_selector_all(SEL_WIZARD_ERROR):
+            try:
+                if await el.is_visible():
+                    err = (await el.inner_text()).strip()
+                    if err:
+                        raise RuntimeError(f"کارزار: {err}")
+            except RuntimeError:
+                raise
+            except Exception:
+                pass
+        idx = await _active_step_index(page)
+        if idx != -1 and idx != prev_idx:
+            await asyncio.sleep(0.8)
+            return "next"
+        await asyncio.sleep(0.5)
+    raise RuntimeError("پیغام موفقیت ثبت امضا نمایش داده نشد.")
+
+
+async def _wait_for_inputs(job: dict, acc_id, fields: list) -> dict:
+    """کار را به حالت waiting_input می‌برد و تا ثبت مقادیر توسط کاربر (از طریق سامانه) منتظر می‌ماند."""
+    job["status"] = J_WAITING
+    job["input_fields"] = fields
+    job["inputs"] = None
+    job["inputs_cancelled"] = False
+    job["waiting_since"] = time.time()
+    _update_account(job, acc_id, message="در انتظار ورود اطلاعات موردنیاز کارزار...")
+    _log(job, "signatures.inputs_requested",
+         f"کارزار {job['campaign_code']} {len(fields)} ورودی اضافه می‌خواهد",
+         fields=[{"name": f["name"], "label": f.get("label"), "type": f.get("type")} for f in fields])
+
+    deadline = time.monotonic() + INPUT_WAIT_TIMEOUT
+    while time.monotonic() < deadline:
+        cur = _read_job(job["id"]) or {}
+        if cur.get("inputs_cancelled"):
+            job["inputs_cancelled"] = True
+            job["status"] = J_RUNNING
+            _save_job(job)
+            raise RuntimeError("ورود اطلاعات کارزار توسط کاربر لغو شد.")
+        if cur.get("inputs") is not None:
+            job["inputs"] = cur["inputs"]
+            job["status"] = J_RUNNING
+            job["waiting_since"] = None
+            _save_job(job)
+            _log(job, "signatures.inputs_received",
+                 f"ورودی‌های کارزار {job['campaign_code']} ثبت شد ({len(job['inputs'])} فیلد)")
+            return job["inputs"]
+        await asyncio.sleep(1)
+
+    job["inputs_cancelled"] = True
+    job["status"] = J_RUNNING
+    _save_job(job)
+    raise RuntimeError("ورودی‌های کارزار در زمان مقرر وارد نشد.")
 
 
 # --------------------------------------------------------------------------
@@ -270,33 +503,28 @@ async def _sign_one(p, job: dict, acc: dict) -> None:
         if await _is_visible(page, SEL_CAPTCHA):
             raise RuntimeError("کارزار کد امنیتی خواست؛ نشست این اکانت معتبر نیست. اکانت را دوباره وارد کنید.")
 
-        # ── دکمهٔ «مرحله‌ی بعد» ────────────────────────────────────────
-        _update_account(job, acc_id, message="در حال کلیک روی «مرحله‌ی بعد»...")
-        next_btn = await page.wait_for_selector(SEL_NEXT_BTN, state="visible", timeout=15_000)
-        await next_btn.click()
-
-        # ── انتظار برای پیغام موفقیت ──────────────────────────────────
-        _update_account(job, acc_id, message="در انتظار تأیید ثبت امضا...")
-        deadline = time.monotonic() + 60
+        # ── مراحل ویزارد: (پر کردن ورودی‌های کارزار) → «مرحله‌ی بعد» → تا پیغام موفقیت ──
         success = False
-        while time.monotonic() < deadline:
-            txt = await _visible_text(page, SEL_SUCCESS)
-            if txt and SUCCESS_TEXT in txt:
+        for _step in range(MAX_WIZARD_STEPS):
+            fields = await _collect_fields(page)
+            if fields:
+                inputs = job.get("inputs")
+                if inputs is None:
+                    inputs = await _wait_for_inputs(job, acc_id, fields)
+                _update_account(job, acc_id, message="در حال جایگذاری ورودی‌های کارزار...")
+                await _fill_fields(page, fields, inputs)
+
+            _update_account(job, acc_id, message="در حال کلیک روی «مرحله‌ی بعد»...")
+            step_idx = await _active_step_index(page)
+            next_btn = await page.wait_for_selector(SEL_NEXT_BTN, state="visible", timeout=15_000)
+            await next_btn.click()
+
+            _update_account(job, acc_id, message="در انتظار تأیید ثبت امضا...")
+            outcome = await _wait_step_outcome(page, step_idx)
+            if outcome == "success":
                 success = True
                 break
-            if await _is_visible(page, SEL_OTP_INPUT):
-                raise RuntimeError("کارزار کد تأیید پیامکی خواست؛ نشست این اکانت معتبر نیست. اکانت را دوباره وارد کنید.")
-            for el in await page.query_selector_all(SEL_WIZARD_ERROR):
-                try:
-                    if await el.is_visible():
-                        err = (await el.inner_text()).strip()
-                        if err:
-                            raise RuntimeError(f"کارزار: {err}")
-                except RuntimeError:
-                    raise
-                except Exception:
-                    pass
-            await asyncio.sleep(0.5)
+            # مرحلهٔ بعدی ویزارد نمایش داده شد؛ دوباره فیلدها را بررسی می‌کنیم
 
         if not success:
             raise RuntimeError("پیغام موفقیت ثبت امضا نمایش داده نشد.")
@@ -372,6 +600,11 @@ async def _run_job(job: dict) -> None:
             for acc in job["accounts"]:
                 if acc["status"] != A_PENDING:
                     continue
+                if job.get("inputs_cancelled"):
+                    _update_account(job, acc["id"], status=A_FAILED,
+                                    message="ورود اطلاعات کارزار لغو شد.",
+                                    finished_at=datetime.now().strftime("%H:%M:%S"))
+                    continue
                 t1 = time.monotonic()
                 await _sign_one(p, job, acc)
                 ok = acc["status"] == A_DONE
@@ -422,6 +655,10 @@ def start_job(campaign_code: str, accounts: list, actor: Optional[dict] = None) 
         "started_ts": time.time(),
         "created_at": datetime.now().strftime("%Y/%m/%d %H:%M"),
         "finished_at": None,
+        "input_fields": [],
+        "inputs": None,
+        "inputs_cancelled": False,
+        "waiting_since": None,
         "accounts": [
             {
                 "id": a["id"],
