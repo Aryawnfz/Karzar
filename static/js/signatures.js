@@ -31,6 +31,165 @@ document.addEventListener('DOMContentLoaded', () => {
     let pollTimer = null;
     let running = false;
 
+    // مودال ورودی‌های اضافهٔ کارزار (شهر، سن، ...)
+    const inputsBanner = document.getElementById('sign-inputs-banner');
+    const inputsOpenBtn = document.getElementById('sign-inputs-open');
+    const inputsSummary = document.getElementById('sign-inputs-summary');
+    const inputsModal = document.getElementById('modal-sign-inputs');
+    const inputsPanel = inputsModal && inputsModal.querySelector('[data-modal-panel]');
+    const inputsForm = document.getElementById('sign-inputs-form');
+    const inputsFields = document.getElementById('sign-inputs-fields');
+    const inputsCode = document.getElementById('sign-inputs-code');
+    const inputsError = document.getElementById('sign-inputs-error');
+    const inputsSubmit = document.getElementById('sign-inputs-submit');
+    const inputsCancel = document.getElementById('sign-inputs-cancel');
+    const inputsClose = document.getElementById('sign-inputs-close');
+    let inputsModalJid = null;      // مودال برای کدام کار ساخته شده
+    let inputsAutoOpened = null;    // برای کدام کار خودکار باز شده (تا بعد از بستن دوباره باز نشود)
+
+    const INPUT_CLS = 'w-full rounded-xl bg-transparent py-3 px-4 text-sm text-slate-700 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 outline-none';
+    const INPUT_WRAP = 'input-glow relative rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5';
+
+    function fieldControl(f) {
+        const name = esc(f.name);
+        const opts = f.options || [];
+        if (f.type === 'select') {
+            return `<div class="${INPUT_WRAP}"><select name="${name}" class="${INPUT_CLS}">${opts.map((o) => `<option value="${esc(o.value)}">${esc(o.label || o.value)}</option>`).join('')}</select></div>`;
+        }
+        if (f.type === 'radio' || (f.type === 'checkbox' && opts.length > 1)) {
+            return `<div class="flex flex-wrap gap-2">${opts.map((o) => `
+                <label class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2 text-sm text-slate-600 dark:text-slate-300">
+                    <input type="${f.type}" name="${name}" value="${esc(o.value)}" class="accent-primary-500"><span>${esc(o.label || o.value)}</span>
+                </label>`).join('')}</div>`;
+        }
+        if (f.type === 'checkbox') {
+            const o = opts[0] || { value: '1' };
+            return `<label class="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" name="${name}" value="${esc(o.value || '1')}" class="accent-primary-500"><span>${esc(o.label || f.label)}</span></label>`;
+        }
+        if (f.type === 'textarea') {
+            return `<div class="${INPUT_WRAP}"><textarea name="${name}" rows="3" ${f.maxlength ? `maxlength="${f.maxlength}"` : ''} placeholder="${esc(f.placeholder)}" class="${INPUT_CLS}"></textarea></div>`;
+        }
+        const type = ['number', 'email', 'tel', 'date', 'url'].includes(f.type) ? f.type : 'text';
+        const ltr = type !== 'text' ? 'dir="ltr"' : '';
+        return `<div class="${INPUT_WRAP}"><input type="${type}" name="${name}" ${ltr} ${f.maxlength ? `maxlength="${f.maxlength}"` : ''} value="${esc(f.value || '')}" placeholder="${esc(f.placeholder)}" class="${INPUT_CLS}"></div>`;
+    }
+
+    function buildInputsModal(job) {
+        if (!inputsFields) return;
+        inputsModalJid = job.id;
+        inputsCode.textContent = job.campaign_code;
+        inputsError.classList.add('hidden');
+        inputsFields.innerHTML = (job.input_fields || []).map((f) => `
+            <div>
+                <label class="mb-2 block text-sm font-medium text-slate-600 dark:text-slate-300">${esc(f.label || f.name)}${f.required ? ' <span class="text-red-500">*</span>' : ''}${f.maxlength ? ` <span class="text-[10px] text-slate-400">(حداکثر ${f.maxlength} کاراکتر)</span>` : ''}</label>
+                ${fieldControl(f)}
+            </div>`).join('');
+    }
+
+    function openInputsModal(job) {
+        if (!inputsModal) return;
+        if (inputsModalJid !== job.id) buildInputsModal(job);
+        inputsModal.classList.remove('hidden');
+        requestAnimationFrame(() => inputsPanel && inputsPanel.classList.remove('scale-95', 'opacity-0'));
+        const first = inputsFields.querySelector('input:not([type=radio]):not([type=checkbox]), select, textarea');
+        if (first) setTimeout(() => first.focus(), 150);
+    }
+
+    function closeInputsModal() {
+        if (!inputsModal) return;
+        inputsPanel && inputsPanel.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => inputsModal.classList.add('hidden'), 200);
+    }
+
+    function collectInputs() {
+        const values = {};
+        (inputsForm ? Array.from(inputsForm.elements) : []).forEach((el) => {
+            if (!el.name) return;
+            if (el.type === 'radio') { if (el.checked) values[el.name] = el.value; else if (!(el.name in values)) values[el.name] = values[el.name] || ''; return; }
+            if (el.type === 'checkbox') { if (el.checked) values[el.name] = values[el.name] ? `${values[el.name]},${el.value}` : el.value; else if (!(el.name in values)) values[el.name] = ''; return; }
+            values[el.name] = el.value;
+        });
+        return values;
+    }
+
+    function renderInputsState(job) {
+        const waiting = job.status === 'waiting_input';
+        inputsBanner && inputsBanner.classList.toggle('hidden', !waiting);
+        if (inputsSummary) {
+            const vals = job.inputs && Object.keys(job.inputs).length ? job.inputs : null;
+            if (vals) {
+                const labels = {}, optLabels = {};
+                (job.input_fields || []).forEach((f) => {
+                    labels[f.name] = f.label || f.name;
+                    (f.options || []).forEach((o) => { optLabels[`${f.name}:${o.value}`] = o.label || o.value; });
+                });
+                const show = (k, v) => String(v || '').split(',').map((x) => optLabels[`${k}:${x}`] || x).join('، ');
+                inputsSummary.innerHTML = 'ورودی‌های کارزار: ' + Object.entries(vals).map(([k, v]) => `<span class="inline-flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-white/5 px-2 py-0.5 me-1"><b>${esc(labels[k] || k)}:</b> ${esc(show(k, v) || '—')}</span>`).join('');
+                inputsSummary.classList.remove('hidden');
+            } else {
+                inputsSummary.classList.add('hidden');
+            }
+        }
+        if (waiting) {
+            if (inputsAutoOpened !== job.id) {
+                inputsAutoOpened = job.id;
+                openInputsModal(job);
+            }
+        } else if (inputsModal && !inputsModal.classList.contains('hidden') && inputsModalJid === job.id) {
+            closeInputsModal();
+        }
+    }
+
+    inputsOpenBtn && inputsOpenBtn.addEventListener('click', () => {
+        fetch(`/signatures/status/${jid}`).then((r) => r.json()).then((d) => {
+            if (d.ok && d.job.status === 'waiting_input') openInputsModal(d.job);
+        });
+    });
+    inputsClose && inputsClose.addEventListener('click', closeInputsModal);
+
+    inputsForm && inputsForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        inputsError.classList.add('hidden');
+        inputsSubmit.disabled = true;
+        inputsSubmit.classList.add('opacity-60');
+        try {
+            const res = await fetch(`/signatures/inputs/${inputsModalJid}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inputs: collectInputs() }),
+            });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error || 'ثبت ورودی‌ها ناموفق بود.');
+            closeInputsModal();
+            inputsModalJid = null;
+        } catch (err) {
+            inputsError.textContent = err.message;
+            inputsError.classList.remove('hidden');
+        } finally {
+            inputsSubmit.disabled = false;
+            inputsSubmit.classList.remove('opacity-60');
+        }
+    });
+
+    inputsCancel && inputsCancel.addEventListener('click', async () => {
+        const ok = await confirmDelete('لغو ثبت امضا', 'بدون ورود اطلاعات، امضای همهٔ اکانت‌های این کار لغو می‌شود. ادامه می‌دهید؟');
+        if (!ok) return;
+        try {
+            const res = await fetch(`/signatures/inputs/${inputsModalJid}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cancel: true }),
+            });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error || 'لغو ناموفق بود.');
+            closeInputsModal();
+            inputsModalJid = null;
+        } catch (err) {
+            inputsError.textContent = err.message;
+            inputsError.classList.remove('hidden');
+        }
+    });
+
     const BADGE = {
         pending: { text: 'در صف', cls: 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400', dot: 'bg-slate-400' },
         running: { text: 'در حال انجام', cls: 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400', dot: 'bg-amber-500 animate-pulse' },
@@ -140,12 +299,16 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBar.style.width = `${Math.round(((done + failed) / Math.max(total, 1)) * 100)}%`;
 
         job.accounts.forEach(renderAccount);
+        renderInputsState(job);
 
         if (job.status === 'finished') {
             progressSpinner.classList.add('hidden');
             progressTitle.textContent = failed === 0
                 ? 'ثبت امضا برای همهٔ اکانت‌ها تکمیل شد.'
                 : `ثبت امضا پایان یافت (${done} موفق، ${failed} ناموفق).`;
+        } else if (job.status === 'waiting_input') {
+            progressSpinner.classList.remove('hidden');
+            progressTitle.textContent = 'منتظر ورود اطلاعات موردنیاز کارزار...';
         } else {
             progressSpinner.classList.remove('hidden');
             const cur = job.accounts.find((a) => a.status === 'running');
@@ -181,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const li = document.createElement('li');
             li.className = 'flex flex-wrap items-center justify-between gap-2 py-2.5';
             const status = running
-                ? '<span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 dark:bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500"></span>در حال انجام</span>'
+                ? `<span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 dark:bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500"></span>${job.status === 'waiting_input' ? 'منتظر ورودی' : 'در حال انجام'}</span>`
                 : `<span class="inline-flex items-center gap-1.5 rounded-full ${failed ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'} px-2.5 py-1 text-[11px] font-semibold">${done} موفق${failed ? `، ${failed} ناموفق` : ''}</span>`;
             const actor = job.actor || {};
             const actorHtml = isAdmin

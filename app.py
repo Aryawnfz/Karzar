@@ -604,7 +604,7 @@ def signatures_job_delete(jid):
     job = _visible_job(jid)
     if not job:
         return jsonify({"ok": False, "error": "کار پیدا نشد."}), 404
-    if job["status"] == karzar_sign.J_RUNNING:
+    if job["status"] in karzar_sign.ACTIVE_STATUSES:
         return jsonify({"ok": False, "error": "این کار هنوز در حال اجراست و نمی‌توان آن را حذف کرد."}), 409
     karzar_sign.delete_job(jid)
     log_event("signatures.job_delete", f"حذف کار ثبت امضای کارزار {job.get('campaign_code')}", level="warning", category="signatures",
@@ -631,6 +631,30 @@ def signatures_status(jid):
     if not job:
         return jsonify({"ok": False, "error": "کار پیدا نشد."}), 404
     return jsonify({"ok": True, "job": job})
+
+
+@app.route("/signatures/inputs/<jid>", methods=["POST"])
+@login_required
+def signatures_inputs(jid):
+    """ثبت (یا لغو) ورودی‌های اضافه‌ای که کارزار برای امضا خواسته است."""
+    job = _visible_job(jid)
+    if not job:
+        return jsonify({"ok": False, "error": "کار پیدا نشد."}), 404
+    if job["status"] != karzar_sign.J_WAITING:
+        return jsonify({"ok": False, "error": "این کار منتظر ورودی نیست."}), 409
+    payload = request.get_json(silent=True) or {}
+    if payload.get("cancel"):
+        karzar_sign.cancel_inputs(jid)
+        log_event("signatures.inputs_cancelled", f"لغو ورود اطلاعات کارزار {job.get('campaign_code')}",
+                  level="warning", category="signatures", details={"jid": jid, "campaign_code": job.get("campaign_code")})
+        return jsonify({"ok": True, "cancelled": True})
+    ok, err = karzar_sign.submit_inputs(jid, payload.get("inputs") or {})
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 400
+    fields = [f.get("name") for f in job.get("input_fields") or []]
+    log_event("signatures.inputs_submitted", f"ورودی‌های کارزار {job.get('campaign_code')} ثبت شد ({len(fields)} فیلد)",
+              category="signatures", details={"jid": jid, "campaign_code": job.get("campaign_code"), "fields": fields})
+    return jsonify({"ok": True})
 
 
 @app.route("/signatures/screenshot/<jid>/<int:account_id>")

@@ -39,6 +39,12 @@
         <div class="mt-4 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
             <div id="sign-progress-bar" class="h-full rounded-full bg-gradient-to-l from-primary-400 to-primary-600 transition-all duration-500" style="width:0%"></div>
         </div>
+        <!-- کارزار ورودی اضافه می‌خواهد -->
+        <div id="sign-inputs-banner" class="hidden mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-500/20 bg-amber-50/70 dark:bg-amber-500/10 px-4 py-3">
+            <p class="text-xs font-semibold text-amber-700 dark:text-amber-300">این کارزار برای ثبت امضا اطلاعات اضافه می‌خواهد؛ تا وارد نشود ثبت امضا متوقف می‌ماند.</p>
+            <button type="button" id="sign-inputs-open" class="btn-shimmer rounded-lg px-4 py-2 text-xs font-bold text-white shadow-soft">ورود اطلاعات</button>
+        </div>
+        <p id="sign-inputs-summary" class="hidden mt-3 text-xs text-slate-500 dark:text-slate-400"></p>
     </div>
 
     <!-- کارهای اخیر (در سرور اجرا می‌شوند و با بستن صفحه لغو نمی‌شوند) -->
@@ -123,6 +129,47 @@
         </button>
     </div>
 </form>
+
+    <!-- مودال ورودی‌های کارزار -->
+    <div id="modal-sign-inputs" data-modal class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+        <div data-modal-panel class="w-full max-w-md scale-95 opacity-0 transition-all duration-200 overflow-hidden rounded-[2rem] glass-card">
+            <div class="modal-header-gradient px-7 pb-8 pt-7 text-white">
+                <div class="relative z-10 flex items-start justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-2 border-dashed border-white/40 bg-white/15 text-xl font-bold backdrop-blur-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M16 13H8"></path><path d="M16 17H8"></path><path d="M10 9H8"></path></svg>
+                        </div>
+                        <div>
+                            <h3 class="font-display text-2xl tracking-wide">اطلاعات موردنیاز کارزار</h3>
+                            <p class="mt-0.5 text-xs text-white/75">کارزار <span id="sign-inputs-code" dir="ltr" class="font-mono"></span> برای امضا این موارد را می‌خواهد</p>
+                        </div>
+                    </div>
+                    <button type="button" id="sign-inputs-close" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+            <form id="sign-inputs-form" class="space-y-4 px-7 pb-7 pt-6" novalidate>
+                <div id="sign-inputs-fields" class="space-y-4"></div>
+
+                <p class="rounded-xl border border-slate-100 dark:border-white/10 bg-slate-50/70 dark:bg-white/5 px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
+                    این مقادیر یک‌بار وارد می‌شوند و برای <b>همهٔ اکانت‌های این کار</b> در فرم کارزار جایگذاری خواهند شد.
+                </p>
+
+                <p id="sign-inputs-error" class="hidden text-xs font-semibold text-red-500"></p>
+
+                <div class="flex gap-3 pt-2">
+                    <button type="button" id="sign-inputs-cancel" class="flex-1 rounded-xl border border-red-200 dark:border-red-500/20 py-3 text-sm font-semibold text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10">لغو ثبت امضا</button>
+                    <button type="submit" id="sign-inputs-submit" class="btn-shimmer flex-1 rounded-xl py-3 text-sm font-bold text-white shadow-soft flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+                        تأیید و ادامهٔ امضا
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 
 {% endblock %}
 
